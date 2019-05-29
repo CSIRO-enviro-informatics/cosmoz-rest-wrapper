@@ -4,12 +4,12 @@ from collections import OrderedDict
 import bson
 from influxdb import InfluxDBClient
 from pymongo import MongoClient
-
+from . import config
 USE_MSSQL = False
 if USE_MSSQL:
     from pymssql import _mssql as mssql
     from src.db import CosmozSQLConnection
-influx_client = InfluxDBClient('localhost', 8186, 'root', 'root', 'cosmoz', timeout=30)
+influx_client = InfluxDBClient(config.INFLUXDB_HOST, config.INFLUXDB_PORT, 'root', 'root', 'cosmoz', timeout=30)
 
 def datetime_to_iso(_d, include_micros=None):
     if include_micros is None:
@@ -77,7 +77,7 @@ station_variable_to_column_map = {
 station_column_to_variable_map = { v: k for k,v in station_variable_to_column_map.items() }
 
 def get_station_mongo(station_number, params):
-    client = MongoClient('localhost', 27018)  # 27017
+    client = MongoClient(config.MONGODB_HOST, config.MONGODB_PORT)  # 27017
     station_number = int(station_number)
     params = params or {}
     property_filter = params.get('property_filter', [])
@@ -154,7 +154,7 @@ if USE_MSSQL:
         return resp
 
 def get_stations_mongo(params):
-    client = MongoClient('localhost', 27018)  # 27017
+    client = MongoClient(config.MONGODB_HOST, config.MONGODB_PORT)  # 27017
     params = params or {}
     property_filter = params.get('property_filter', [])
     count = params.get('count', 1000)
