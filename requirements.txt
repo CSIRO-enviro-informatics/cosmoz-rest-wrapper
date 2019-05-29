@@ -1,0 +1,9 @@
+sanic>=0.8.0
+sanic-plugins-framework
+sanic-cors
+sanic_restplus
+sanic-jinja2-spf
+#pymssql
+influxdb>5.2
+pymongo>3.7
+

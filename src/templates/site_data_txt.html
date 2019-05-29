@@ -1,0 +1,73 @@
+{{site_name}} Values {%if calibration_type == "V" %}(Sensor has been calibrated.){% else %}(Warning: This sensor has not been calibrated!){% endif %}
+
+
+{{"Latitude".rjust(35)}} {{ "%19.3f"|format(latitude) }}
+{{"Longitude".rjust(35)}} {{ "%19.3f"|format(longitude) }}
+{{"Altitude".rjust(35)}} {{ "%19.3f"|format(altitude) }} m
+{{"Installation Date".rjust(35)}} {{ (installation_date|truncate(10, end="")).rjust(19) }}
+{{"Timezone".rjust(35)}} {{ (timezone|trim).rjust(19) }}
+{{"Dose Site".rjust(35)}} {{ nmdb.rjust(19) }}
+{{"Lattice Water".rjust(35)}} {{ "%19.3f"|format(lattice_water_g_g) }} g water / g soil
+{{"Soil Organic Matter".rjust(35)}} {{ "%19.3f"|format(soil_organic_matter_g_g) }} g water / g soil
+{{"Average Bulk Density".rjust(35)}} {{ "%19.3f"|format(bulk_density) }} g cm^-3
+{{"Cut-Off Rigidity".rjust(35)}} {{ "%19.3f"|format(cutoff_rigidity) }} GV
+{{"Average N0".rjust(35)}} {{ "%19.3f"|format(n0_cal) }} c h^-1
+{{"Reference Pressure".rjust(35)}} {{ "%19.3f"|format(ref_pressure) }} mb
+{{"Intensity Reference Value".rjust(35)}} {{ "%19.3f"|format(ref_intensity) }} c h^-1
+{{"Vapor Reference Value".rjust(35)}} {{ "%19.3f"|format(0.0) }} g m^-3
+{{"Atmospheric Depth".rjust(35)}} {{ "%19.3f"|format((ref_pressure|float)/0.981) }} g cm^-2
+{{"Atmospheric Attentuation Coeffcient".rjust(35)}} {{ "0.008".rjust(19) }} mb^-1
+{{"Sea Level Reference Pressure".rjust(35)}} {{ "%19.3f"|format(1013.25) }} mb
+{{"Sea Level Atmospheric Depth".rjust(35)}} {{ "%19.3f"|format(1013.25/0.981) }} g cm^-2
+{{"Sea Level Atmsospheric Attenuation".rjust(35)}} {{ "0.007".rjust(19) }} mb^-1
+{{"Elevation Scale".rjust(35)}} {{ "%19.3f"|format(elev_scaling) }}
+{{"Latitude Scale".rjust(35)}} {{ "%19.3f"|format(latit_scaling) }}
+
+
+Notes
+
+'Dose Site' is the neutron monitor station from NMDB.eu with the nearest Cut-Off Rigidity and reliable data
+
+'Lattice Water' is the amount of water trapped in the mineral structures of the soil it is defined as the amount of water released at 1000_C preceded by drying at 105_C. Analysis is undertaken ACTLABS Canada. See Hawdon et al. 2014 for details.
+
+'Soil Organic matter' is the amount of organic matter in the soil expressed as a water equivalent. Analysis is undertaken ACTLABS Canada. See Hawdon et al. 2014 for details.
+
+'Average Bulk Density' is calculated from field calibrations at each site
+
+'Cut-Off Rigidity' is calculated from Latitude and longitude using this calculator http://cosmos.hwr.arizona.edu/Util/rigidity.php
+
+'Average N0' is the counting rate for completely dry soil defined using equation A1 of Desilets et al. (2010) in form presented by Hawdon et al. (2014) in equation 7.
+
+'Reference Pressure' is the atmospheric pressure at the given site altitude according to the Atmospheric Standards Formula (U.S. Standard Atmosphere, 1976)
+
+'Intensity References Value' is the neutron monitor count for the Dose Site on the 1 May 2011
+
+'Vapor Reference Value' is the water content of completely dry air, i.e. 0
+
+'Atmospheric Depth' is the reference pressure divided by gravity
+
+'Atmospheric Attenuation Coefficient' is calculated from Desilets and Zreda (2003) equation 11
+
+'Sea Level Reference Pressure' is the atmospheric pressure at sea level according to the Atmospheric Standards Formula (U.S. Standard Atmosphere, 1976)
+
+'Sea Level Atmospheric depth' is the reference pressure at sea level divided by gravity
+
+'Sea Level Atmospheric attenuation coefficient' is calculated from Desilets and Zreda (2003) equation 11
+
+'Elevation Scale' and 'Latitude Scale' are calculated following Desilets and Zreda (2006) and allow correction of site count values to a common reference point (in this case sea level at the equator) so that they can be directly compared.
+
+See Hawdon et al. (2014) for application of these terms.
+
+
+
+References
+
+Hawdon, A., D. McJannet, and J. Wallace (2014), Calibration and correction procedures for cosmic-ray neutron soil moisture probes located across Australia, Water Resour. Res., 50(6), 5029-5043, doi: 10.1002/2013wr015138
+
+Desilets, D., and M. Zreda (2003), Spatial and temporal distribution of secondary cosmic-ray nucleon intensities and applications to in situ cosmogenic dating, Earth Planet. Sci. Lett., 206(1-2), 21-42, doi: 10.1016/s0012-821x(02)01088-9.
+
+Desilets, D., M. Zreda, and T. Prabu (2006), Extended scaling factors for in situ cosmogenic nuclides: New measurements at low latitude, Earth Planet. Sci. Lett., 246(3-4), 265-276, doi: 10.1016/j.epsl.2006.03.051.
+
+Desilets, D., M. Zreda, and T. P. A. Ferre (2010), Nature's neutron probe: Land surface hydrology at an elusive scale with cosmic rays, Water Resour. Res., 46, doi: 10.1029/2009wr008726
+
+U.S. Standard Atmosphere (1976), U.S. Standard Atmosphere, 1976, NOAA-S/T 76-1526, U.S. Gov. Print. Off., Washington, D. C.

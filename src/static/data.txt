@@ -1,0 +1,67 @@
+Data Use Agreement
+The CosmOz data are freely available for use however we request that you contact the network managers ( David.McJannet@csiro.au or Aaron.Hawdon@csiro.au ) when using the data so we can advise of any data issues and facilitate liaison with individual probe managers. We also request that you acknowledge the CosmOz network in any publications (i.e. We acknowledge the CSIRO funded CosmOz network (cosmoz.csiro.au) for provision and processing of data)
+
+Raw Data
+This is the data as it comes in from each station via satellite.
+
+'YYYY-MM-DD' is Date
+'HH:MM' is time in UTC
+'COUNT' is the total neutron count for the time period
+'PRESS' is Atmospheric pressure at the station (low resolution)
+'I_TEM' is temperature inside the logger box
+'I_RH' is relative humidity inside the box
+'BATT' is battery voltage
+'C_TEM' is temperature inside the tube capsule
+'C_RH' is humidity inside the tube capsule
+'RAIN' is rain gauge tips (NOT mm)
+'TDR1', 'TDR2', 'TDR3' are tdr frequency readings
+'PRES2' is high resolution atmospheric pressure
+'EX_TEM' is external temperature
+'EX_RH' is external relative humidity
+
+Level 1
+This is the raw data with flags added to identify potentially poor data. Column headings are the same as for 'Raw Data'.
+
+Flag 0 = good data
+Flag 1 = neutron counts more than 20% different from previous time step
+Flag 2 = neutron counts less than 40% of the maximum count rate (N0)
+Flag 3 = neutron counts greater than the maximum count rate (N0)
+Flag 4 = probe voltage less than 10 volts
+Flag 5 = manual flag added by system administrators
+Flag 6 = problem with NMDB.eu data
+
+Level 2
+This data level includes corrections for atmospheric pressure, humidity, and incoming neutron intensity changes. See Hawdon et al. (2014) for details.
+
+'YYYY-MM-DD' is Date
+'HH:MM' is time in UTC
+'PRESS CORR' is the atmospheric pressure correction applied
+'WVCORR' is the atmospheric humidity correction applied
+'INTENSITY CORR' is the incoming neutron intensity correction applied
+'CORRCOUNT' is neutron counts corrected for pressure, humidity, and incoming neutron intensity changes and scaled to sea level at the equator. See Hawdon et al. (2014) for details
+'FLAG' is the data quality Flags as above for Level 1 data
+
+Level 3
+This data level is where soil moisture content, the effective measurement depth and rainfall are calculated. See Hawdon et al. (2014) for details.
+
+'YYYY-MM-DD' is Date
+'HH:MM' is time in UTC
+'SOILMOIST' is the calculated soil moisture content.
+'DEPTH' is the calculated effective measurement depth.
+'RAIN' the total rainfall (mm)
+'FLAG' is the data quality Flags as above for Level 1 data
+
+Level 4
+This is the final dataset with all flagged data removed.
+
+'YYYY-MM-DD' is Date
+'HH:MM' is time in UTC
+'SOILMOIST' is the calculated soil moisture content.
+'DEPTH' is the calculated effective measurement depth.
+'RAIN' the total rainfall (mm)
+'7HSOILMOIST' is the 7 hour (current hour plus 3 hours before and after) moving average of calculated soil moisture content
+'7HDEPTH' is the 7 hour (current hour plus 3 hours before and after) moving average of the calculated effective measurement depth
+
+Reference
+Hawdon, A., D. McJannet, and J. Wallace (2014), Calibration and correction procedures for cosmic-ray neutron soil moisture probes located across Australia, Water Resour. Res., 50(6), 5029-5043, doi: 10.1002/2013wr015138
+

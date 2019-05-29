@@ -1,0 +1,491 @@
+import datetime
+from collections import OrderedDict
+
+import bson
+from influxdb import InfluxDBClient
+from pymongo import MongoClient
+
+USE_MSSQL = False
+if USE_MSSQL:
+    from pymssql import _mssql as mssql
+    from src.db import CosmozSQLConnection
+influx_client = InfluxDBClient('localhost', 8186, 'root', 'root', 'cosmoz', timeout=30)
+
+def datetime_to_iso(_d, include_micros=None):
+    if include_micros is None:
+        include_micros = _d.microsecond != 0
+    if include_micros:
+        return _d.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    else:
+        return _d.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def datetime_from_iso(_d):
+    try:
+        return datetime.datetime.strptime(_d, "%Y-%m-%dT%H:%M:%S.%fZ")
+    except Exception:
+        return datetime.datetime.strptime(_d, "%Y-%m-%dT%H:%M:%SZ")
+
+obsv_variable_to_column_map = {
+    'timestamp': 'Timestamp',
+    'soil_moist': 'SoilMoist',
+    'effective_depth': 'EffectiveDepth',
+    'rainfall': 'Rainfall',
+    'soil_moist_filtered': 'SoilMoistFiltered',
+    'depth_filtered': 'DepthFiltered',
+    ###
+    'corr_count': 'CorrCount',
+    'count': 'Count',
+    'flag': 'Flag',
+    'intensity_corr': 'IntensityCorr',
+    'pressure_corr': 'PressureCorr',
+    'wv_corr': 'WVCorr'
+}
+
+obsv_column_to_variable_map = { v: k for k,v in obsv_variable_to_column_map.items() }
+
+station_variable_to_column_map = {
+    'altitude': 'Altitude',
+    'beta': 'Beta',
+    'bulk_density': 'BulkDensity',
+    'calibration_type': 'CalibrationType',
+    'contact': 'Contact',
+    'cutoff_rigidity': 'CutoffRigidity',
+    'elev_scaling': 'ElevScaling',
+    'email': 'Email',
+    'installation_date': 'InstallationDate',
+    'latit_scaling': 'LatitScaling',
+    'latitude': 'Latitude',
+    'lattice_water_g_g': 'LatticeWater_g_g',
+    'longitude': 'Longitude',
+    'n0_cal': 'N0_Cal',
+    'nmdb': 'NMDB',
+    'network': 'Network',
+    'ref_intensity': 'RefIntensity',
+    'ref_pressure': 'RefPressure',
+    'sat_data_select': 'SatDataSelect',
+    'scaling': 'Scaling',
+    'site_description': 'SiteDescription',
+    'site_name': 'SiteName',
+    'site_no': 'SiteNo',
+    'site_photo_name': 'SitePhotoName',
+    'soil_organic_matter_g_g': 'SoilOrganicMatter_g_g',
+    'timezone': 'Timezone',
+    'tube_type': 'TubeType'
+}
+
+station_column_to_variable_map = { v: k for k,v in station_variable_to_column_map.items() }
+
+def get_station_mongo(station_number, params):
+    client = MongoClient('localhost', 27018)  # 27017
+    station_number = int(station_number)
+    params = params or {}
+    property_filter = params.get('property_filter', [])
+    if property_filter and len(property_filter) > 0:
+        if '*' in property_filter:
+            select_filter = None
+        else:
+            select_filter = OrderedDict({v: True for v in property_filter})
+            if "site_no" not in select_filter:
+                select_filter['site_no'] = True
+            select_filter.move_to_end('site_no', last=False)
+            if "_id" not in select_filter:
+                select_filter['_id'] = False
+            select_filter.move_to_end('_id', last=False)
+    else:
+        select_filter = None
+    db = client.cosmoz
+    all_stations_collection = db.all_stations
+    row = all_stations_collection.find_one({'site_no': station_number}, projection=select_filter)
+    if row is None or len(row) < 1:
+        raise LookupError("Cannot find site.")
+    resp = row
+    #resp = { station_column_to_variable_map[c]: v for c,v in row.items() if c in station_column_to_variable_map.keys() }
+    if select_filter is None or select_filter.get('_id', False) is False:
+        if '_id' in resp:
+            del resp['_id']
+    if 'installation_date' in resp:
+        resp['installation_date'] = datetime_to_iso(resp['installation_date'])
+    for r,v in resp.items():
+        if isinstance(v, datetime.datetime):
+            resp[r] = datetime_to_iso(v)
+        elif isinstance(v, bson.decimal128.Decimal128):
+            resp[r] = v.to_decimal()
+    return resp
+
+
+if USE_MSSQL:
+    def get_station_sql(station_number, params):
+        station_number = int(station_number)
+        params = params or {}
+        username = params.get('username', None)
+        password = params.get('password', None)
+        property_filter = params.get('property_filter', [])
+        all_rows = None
+
+        if property_filter and len(property_filter) > 0:
+            if '*' in property_filter:
+                select_string = '*'
+            else:
+                try:
+                    select_cols = [station_variable_to_column_map[v] for v in property_filter]
+                    if "SiteNo" not in select_cols:
+                        select_cols.insert(0, "SiteNo")
+                    select_string = ",".join(select_cols)
+                except KeyError:
+                    raise RuntimeError("Cannot convert filter variable to column name.")
+        else:
+            select_string = '*'
+
+        with CosmozSQLConnection(username=username, password=password) as connection:
+            sql = 'SELECT {:s} FROM AllStations WHERE SiteNo=%d;'.format(select_string)
+            with connection.cursor(as_dict=True) as cursor:
+                try:
+                    cursor.execute(sql, station_number)
+                    all_rows = cursor.fetchall()
+                except mssql.MSSQLException as e:
+                    raise RuntimeError("Error executing SQL Query.\n{:s}\n".format(e.args[0]))
+        if all_rows is None or len(all_rows) < 1:
+            raise LookupError("Cannot find that site.")
+        row = next(iter(all_rows))
+        resp = { station_column_to_variable_map[c]: v for c,v in row.items() if c in station_column_to_variable_map.keys() }
+        if 'installation_date' in resp:
+            resp['installation_date'] = datetime_to_iso(resp['installation_date'])
+        return resp
+
+def get_stations_mongo(params):
+    client = MongoClient('localhost', 27018)  # 27017
+    params = params or {}
+    property_filter = params.get('property_filter', [])
+    count = params.get('count', 1000)
+    offset = params.get('offset', 0)
+    if property_filter and len(property_filter) > 0:
+        if '*' in property_filter:
+            select_filter = None
+        else:
+            select_filter = OrderedDict({v: True for v in property_filter})
+            if "site_no" not in select_filter:
+                select_filter['site_no'] = True
+            select_filter.move_to_end('site_no', last=False)
+            if "_id" not in select_filter:
+                select_filter['_id'] = False
+            select_filter.move_to_end('_id', last=False)
+    else:
+        select_filter = None
+
+    db = client.cosmoz
+    all_stations_collection = db.all_stations
+
+    all_stations_cur = all_stations_collection.find({}, projection=select_filter, skip=offset, limit=count)
+
+    if all_stations_cur is None:
+        raise LookupError("Cannot find any sites.")
+    count = 0
+    stations = []
+    for _row in all_stations_cur:
+        station = _row
+        #station = { station_column_to_variable_map[c]: v
+        #            for c,v in _row.items() if c in station_column_to_variable_map.keys() }
+        for r, v in station.items():
+            if isinstance(v, datetime.datetime):
+                station[r] = datetime_to_iso(v)
+            elif isinstance(v, bson.decimal128.Decimal128):
+                station[r] = v.to_decimal()
+        if select_filter is None or select_filter.get('_id', False) is False:
+            if '_id' in station:
+                del station['_id']
+        stations.append(station)
+        count += 1
+    resp = {
+        'meta': {
+        'count': count,
+        'offset': offset,
+        },
+        'stations': stations,
+    }
+    return resp
+
+if USE_MSSQL:
+    def get_stations_sql(params):
+        params = params or {}
+        property_filter = params.get('property_filter', [])
+        count = params.get('count', 1000)
+        offset = params.get('offset', 0)
+        username = params.get('username', None)
+        password = params.get('password', None)
+        all_rows = None
+
+        if property_filter and len(property_filter) > 0:
+            if '*' in property_filter:
+                select_string = '*'
+            else:
+                try:
+                    select_cols = [station_variable_to_column_map[v] for v in property_filter]
+                    if "SiteNo" not in select_cols:
+                        select_cols.insert(0, "SiteNo")
+                    select_string = ",".join(select_cols)
+                except KeyError:
+                    raise RuntimeError("Cannot convert filter variable to column name.")
+        else:
+            select_string = '*'
+
+        with CosmozSQLConnection(username=username, password=password) as connection:
+            sql = 'SELECT {:s} FROM AllStations ORDER BY [SiteNo] OFFSET {:d} ROWS ' \
+                  'FETCH NEXT {:d} ROWS ONLY;'.format(select_string, offset, count)
+            with connection.cursor(as_dict=True) as cursor:
+                try:
+                    cursor.execute(sql)
+                    all_rows = cursor.fetchall()
+                except mssql.MSSQLException as e:
+                    raise RuntimeError("Error executing SQL Query.\n{:s}\n".format(e.args[0]))
+        if all_rows is None or len(all_rows) < 1:
+            raise LookupError("Cannot find any sites.")
+        count = len(all_rows)
+        stations = []
+        for _row in all_rows:
+            station = { station_column_to_variable_map[c]: v
+                        for c,v in _row.items() if c in station_column_to_variable_map.keys() }
+            if 'installation_date' in station:
+                station['installation_date'] = datetime_to_iso(station['installation_date'])
+            stations.append(station)
+        resp = {
+            'meta': {
+            'count': count,
+            'offset': offset,
+            },
+            'stations': stations,
+        }
+        return resp
+
+def get_last_observations_influx(site_number, params):
+    site_number = int(site_number)
+    params = params or {}
+    processing_level = params.get('processing_level', 3)
+    property_filter = params.get('property_filter', [])
+    count = params.get('count', 1)
+
+    assert 0 <= processing_level <= 4, "Only levels 0, 1, 2, 3, 4 are acceptable."
+    if processing_level < 1:
+        db_measurement = "raw_values"
+    else:
+        db_measurement = "level{:d}".format(processing_level)
+
+    all_rows = None
+    get_all = "*"
+    if property_filter and len(property_filter) > 0:
+        if '*' in property_filter:
+            select_string = get_all
+        else:
+            select_cols = property_filter
+            if "time" not in select_cols:
+                select_cols.insert(0, "time")
+            select_string = ",".join(select_cols)
+    else:
+        select_string = get_all
+    sql = 'SELECT {:s} FROM "{:s}" WHERE "site_no"=\'{:d}\' ORDER BY "time" DESC LIMIT {:d};' \
+          .format(select_string, db_measurement, site_number, count)
+    result = influx_client.query(sql)
+    points = result.get_points()
+    count = 0
+    observations = []
+    for _row in points:
+        observation = _row
+        #observation = {obsv_column_to_variable_map[c]: v
+        #               for c, v in _row.items() if c in obsv_column_to_variable_map.keys()}
+        #if 'time' in observation:
+        #    observation['time'] = datetime_to_iso(observation['timestamp'])
+        observations.append(observation)
+        count = count+1
+    resp = {
+        'meta': {
+        'site_no': site_number,
+        'processing_level': processing_level,
+        'count': count,
+        #'start_date': datetime_to_iso(startdate) if startdate else '',
+        #'end_date': datetime_to_iso(enddate) if enddate else '',
+        },
+        'observations': observations,
+    }
+    return resp
+
+def get_observations_influx(site_number, params):
+    site_number = int(site_number)
+    params = params or {}
+    processing_level = params.get('processing_level', 3)
+    property_filter = params.get('property_filter', [])
+    count = params.get('count', 1000)
+    offset = params.get('offset', 0)
+    aggregate = params.get('aggregate', None)
+    if aggregate == "" or aggregate == 0:
+        aggregate = None
+    startdate = params.get('startdate', None)
+    enddate = params.get('enddate', None)
+    if startdate is not None and isinstance(startdate, str):
+        startdate = datetime_from_iso(startdate)
+    if enddate is not None and isinstance(enddate, str):
+        enddate = datetime_from_iso(enddate)
+
+    assert 0 <= processing_level <= 4, "Only levels 0, 1, 2, 3 or 4 are acceptable."
+    if processing_level < 1:
+        db_measurement = "raw_values"
+    else:
+        db_measurement = "level{:d}".format(processing_level)
+
+    all_rows = None
+    if startdate is None:
+        since_query = ""
+    else:
+        if isinstance(startdate, datetime.datetime):
+            start_datetime_string = startdate.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        elif isinstance(startdate, str):
+            start_datetime_string = startdate
+        else:
+            raise RuntimeError()
+        since_query = " AND time >= \'{:s}\' ".format(start_datetime_string)
+
+    if enddate is None:
+        before_query = ""
+    else:
+        if isinstance(enddate, datetime.datetime):
+            end_datetime_string = enddate.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        elif isinstance(enddate, str):
+            end_datetime_string = enddate
+        else:
+            raise RuntimeError()
+        before_query = " AND time <= \'{:s}\' ".format(end_datetime_string)
+
+    if aggregate:
+        get_all = "MEAN(*),MIN(*),MAX(*),COUNT(*)"
+    else:
+        get_all = "*"
+    if property_filter and len(property_filter) > 0:
+        if '*' in property_filter:
+            select_string = get_all
+        else:
+            if aggregate:
+                select_cols = ["MEAN({v:s}),MIN({v:s}),MAX({v:s}),COUNT({v:s})".format(v=v) for v in property_filter]
+            else:
+                select_cols = property_filter
+            if "time" not in select_cols:
+                select_cols.insert(0, "time")
+            select_string = ",".join(select_cols)
+    else:
+        select_string = get_all
+    if aggregate:
+        sql = 'SELECT {:s} FROM "{:s}" WHERE "site_no"=\'{:d}\'{:s}{:s}GROUP BY time({:s}) ORDER BY "time" ASC LIMIT {:d} OFFSET {:d}; ' \
+              .format(select_string, db_measurement, site_number, since_query, before_query, aggregate, count, offset)
+    else:
+        sql = 'SELECT {:s} FROM "{:s}" WHERE "site_no"=\'{:d}\'{:s}{:s}ORDER BY "time" ASC LIMIT {:d} OFFSET {:d}; ' \
+              .format(select_string, db_measurement, site_number, since_query, before_query, count, offset)
+    result = influx_client.query(sql)
+    points = result.get_points()
+    count = 0
+    observations = []
+    for _row in points:
+        observation = _row
+        #observation = {obsv_column_to_variable_map[c]: v
+        #               for c, v in _row.items() if c in obsv_column_to_variable_map.keys()}
+        #if 'time' in observation:
+        #    observation['time'] = datetime_to_iso(observation['timestamp'])
+        observations.append(observation)
+        count = count+1
+    resp = {
+        'meta': {
+        'site_no': site_number,
+        'processing_level': processing_level,
+        'count': count,
+        'offset': offset,
+        'start_date': datetime_to_iso(startdate) if startdate else '',
+        'end_date': datetime_to_iso(enddate) if enddate else '',
+        },
+        'observations': observations,
+    }
+    if aggregate:
+        resp['meta']['aggregation'] = str(aggregate)
+    return resp
+
+if USE_MSSQL:
+    def get_observations_sql(site_number, params):
+        site_number = int(site_number)
+        params = params or {}
+        processing_level = params.get('processing_level', 3)
+        property_filter = params.get('property_filter', [])
+        count = params.get('count', 1000)
+        offset = params.get('offset', 0)
+        username = params.get('username', None)
+        password = params.get('password', None)
+        startdate = params.get('startdate', None)
+        enddate = params.get('enddate', None)
+        if startdate is not None and isinstance(startdate, str):
+            startdate = datetime_from_iso(startdate)
+        if enddate is not None and isinstance(enddate, str):
+            enddate = datetime_from_iso(enddate)
+
+        db_table = "Level{:d}_Table".format(processing_level)
+        assert 2 <= processing_level <= 4, "Only levels 2, 3 and 4 are used for now."
+        all_rows = None
+        if startdate is None:
+            since_query = ""
+        else:
+            if isinstance(startdate, datetime.datetime):
+                start_datetime_string = startdate.strftime("%Y%m%d %H:%M:%S")
+            elif isinstance(startdate, str):
+                start_datetime_string = startdate
+            else:
+                raise RuntimeError()
+            since_query = " AND Timestamp >= '{:s}' ".format(start_datetime_string)
+
+        if enddate is None:
+            before_query = ""
+        else:
+            if isinstance(enddate, datetime.datetime):
+                end_datetime_string = enddate.strftime("%Y%m%d %H:%M:%S")
+            elif isinstance(enddate, str):
+                end_datetime_string = enddate
+            else:
+                raise RuntimeError()
+            before_query = " AND Timestamp <= '{:s}' ".format(end_datetime_string)
+
+        if property_filter and len(property_filter) > 0:
+            if '*' in property_filter:
+                select_string = '*'
+            else:
+                try:
+                    select_cols = [obsv_variable_to_column_map[v] for v in property_filter]
+                    if "Timestamp" not in select_cols:
+                        select_cols.insert(0, "Timestamp")
+                    select_string = ",".join(select_cols)
+                except KeyError:
+                    raise RuntimeError("Cannot convert filter variable to column name.")
+        else:
+            select_string = '*'
+
+        with CosmozSQLConnection(username=username, password=password) as connection:
+            sql = 'SELECT {:s} FROM {:s} WHERE SiteNo=%d{:s}{:s}ORDER BY [Timestamp] OFFSET {:d} ROWS ' \
+                  'FETCH NEXT {:d} ROWS ONLY;'.format(select_string, db_table, since_query, before_query, offset, count)
+            with connection.cursor(as_dict=True) as cursor:
+                try:
+                    cursor.execute(sql, site_number)
+                    all_rows = cursor.fetchall()
+                except mssql.MSSQLException as e:
+                    raise RuntimeError("Error executing SQL Query.\n{:s}\n".format(e.args[0]))
+        count = len(all_rows)
+        observations = []
+        for _row in all_rows:
+            observation = {obsv_column_to_variable_map[c]: v
+                           for c, v in _row.items() if c in obsv_column_to_variable_map.keys()}
+            if 'timestamp' in observation:
+                observation['timestamp'] = datetime_to_iso(observation['timestamp'])
+            observations.append(observation)
+        resp = {
+            'meta': {
+            'site_no': site_number,
+            'processing_level': processing_level,
+            'count': count,
+            'offset': offset,
+            'start_date': datetime_to_iso(startdate) if startdate else '',
+            'end_date': datetime_to_iso(enddate) if enddate else '',
+            },
+            'observations': observations,
+        }
+        return resp
