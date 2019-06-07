@@ -265,3 +265,4 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+src/_sql_db_config.py
