@@ -1,9 +1,12 @@
-sanic>=0.8.0
+sanic>=0.8.3
 sanic-plugins-framework
 sanic-cors
 sanic_restplus
 sanic-jinja2-spf
+sanic-oauthlib>=0.1.4
+sanic-session-spf
+python-dotenv
 #pymssql
 influxdb>5.2
 pymongo>3.7
-
+cachetools>3.0

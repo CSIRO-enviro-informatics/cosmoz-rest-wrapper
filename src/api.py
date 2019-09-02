@@ -1,20 +1,51 @@
+# -*- coding: utf-8 -*-
+"""
+Copyright 2019 CSIRO Land and Water
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
 import sys
 from collections import OrderedDict
 import datetime
 import pytz
 from sanic_restplus import Api, Resource, fields
-from sanic.response import json
+from sanic.response import json, text
 from sanic.exceptions import ServiceUnavailable
 from sanic_jinja2_spf import sanic_jinja2
 
-from .functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_last_observations_influx
+from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
+from util import PY_36
 
-is_py36 = sys.version_info[0:3] >= (3, 6, 0)
 
 url_prefix = 'rest'
 
+security_defs = {
+    # X-API-Key: abcdef12345
+    'APIKeyHeader': {
+        'type': 'apiKey',
+        'in': 'header',
+        'name': 'X-API-Key'
+    },
+    'APIKeyQueryParam': {
+        'type': 'apiKey',
+        'in': 'query',
+        'name': 'api_key'
+    }
+}
+
 api = Api(title="CSIRO Cosmoz REST Interface",
           prefix=url_prefix, doc='/'.join([url_prefix, "doc"]),
+          authorizations=security_defs,
           default_mediatype="application/json",
           additional_css="/static/material_swagger.css")
 ns = api.default_namespace
@@ -85,11 +116,6 @@ class Stations(Resource):
     '''Gets a JSON representation of all sites in the COSMOZ database.'''
 
     @ns.doc('get_stations', params=OrderedDict([
-        # ("username", {"description": "Your Cosmoz SQL DB username.", "required": True,
-        #               "type": "string", "format": "text"}),
-        #
-        # ("password", {"description": "Your Cosmoz SQL DB password.", "required": True,
-        #                  "type": "string", "format": "password"}),
         ("property_filter", {"description": "Comma delimited list of properties to retrieve.\n\n"
                              "_Enter * for all_.",
                              "required": False, "type": "string", "format": "text"}),
@@ -97,16 +123,10 @@ class Stations(Resource):
                    "required": False, "type": "number", "format": "integer", "default": 100}),
         ("offset", {"description": "Skip number of records before reading count.",
                     "required": False, "type": "number", "format": "integer", "default": 0}),
-    ]))
+    ]), security=None)
 
     async def get(self, request, *args, **kwargs):
         '''Get cosmoz stations.'''
-        username = request.args.getlist('username', None)
-        password = request.args.getlist('password', None)
-        if username:
-            username = next(iter(username))
-        if password:
-            password = next(iter(password))
         property_filter = request.args.getlist('property_filter', None)
         if property_filter:
             property_filter = str(next(iter(property_filter))).split(',')
@@ -121,14 +141,26 @@ class Stations(Resource):
         else:
             offset = 0
         obs_params = {
-            "username": username,
-            "password": password,
             "property_filter": property_filter,
             "count": count,
             "offset": offset,
         }
         res = get_stations_mongo(obs_params)
         return json(res, status=200)
+
+    @ns.doc('post_station', params=OrderedDict([
+        ("name", {"description": "Station Name",
+          "required": True, "type": "string", "format": "text"}),
+        ("latitude", {"description": "Latitude (in decimal degrees)",
+                  "required": True, "type": "string", "format": "number"}),
+        ("longitude", {"description": "Longitude (in decimal degrees)",
+                      "required": True, "type": "string", "format": "number"}),
+    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    @ns.produces(["application/json"])
+    async def post(self, request, *args, **kwargs):
+        '''Add new cosmoz station.'''
+        #Generates station number
+        return text("OK")
 
 @ns.route('/stations/<station_no>')
 @ns.param('station_no', "Station Number", type="number", format="integer")
@@ -138,11 +170,6 @@ class Station(Resource):
     '''Gets site date for station_no.'''
 
     @ns.doc('get_station', params=OrderedDict([
-        # ("username", {"description": "Your Cosmoz SQL DB username.", "required": True,
-        #               "type": "string", "format": "text"}),
-        #
-        # ("password", {"description": "Your Cosmoz SQL DB password.", "required": True,
-        #                  "type": "string", "format": "password"}),
         ("property_filter", {"description": "Comma delimited list of properties to retrieve.\n\n"
                              "_Enter * for all_.",
                              "required": False, "type": "string", "format": "text"}),
@@ -153,12 +180,6 @@ class Station(Resource):
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         station_no = int(station_no)
-        username = request.args.getlist('username', None)
-        if username:
-            username = next(iter(username))
-        password = request.args.getlist('password', None)
-        if password:
-            password = next(iter(password))
         return_type = match_accept_mediatypes_to_provides(request, self.accept_types)
         format = request.args.getlist('format', None)
         if format:
@@ -175,12 +196,10 @@ class Station(Resource):
             # CSV and TXT get all properties, regardless of property_filter
             property_filter = "*"
         obs_params = {
-            "username": username,
-            "password": password,
             "property_filter": property_filter,
         }
-
-        res = get_station_mongo(station_no, obs_params)
+        json_safe = return_type == "application/json"
+        res = get_station_mongo(station_no, obs_params, json_safe=json_safe)
         if return_type == "application/json":
             return json(res, status=200)
         elif return_type == "applcation/csv":
@@ -189,22 +208,97 @@ class Station(Resource):
         elif return_type == "text/plain":
             headers = {'Content-Type': return_type}
             jinja2 = get_jinja2_for_api(self.api)
-            if is_py36:
-                return jinja2.render_async('site_data_txt.html', request, headers=headers, **res)
+            if PY_36:
+                return jinja2.render_async('site_values_txt.html', request, headers=headers, **res)
             else:
-                return jinja2.render('site_data_txt.html', request, headers=headers, **res)
+                return jinja2.render('site_values_txt.html', request, headers=headers, **res)
+
+    @ns.doc('put_station', params=OrderedDict([
+        ("name", {"description": "Station Name",
+          "required": True, "type": "string", "format": "text"}),
+    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    @ns.produces(accept_types)
+    async def put(self, request, *args, station_no=None, **kwargs):
+        '''Add cosmoz station with station_no.'''
+        if station_no is None:
+            raise RuntimeError("station_no is mandatory.")
+        return text("OK")
+
+@ns.route('/stations_calibration/<station_no>')
+@ns.param('station_no', "Station Number", type="number", format="integer")
+@ns.response(404, 'Station Calibration not found')
+class StationCalibration(Resource):
+    accept_types = ["application/json", "application/csv", "text/plain"]
+    '''Gets site date for station_no.'''
+
+    @ns.doc('get_station_cal', params=OrderedDict([
+        ("property_filter", {
+            "description": "Comma delimited list of properties to retrieve.\n\n"
+                           "_Enter * for all_.",
+            "required": False, "type": "string", "format": "text"}),
+    ]))
+    @ns.produces(accept_types)
+    async def get(self, request, *args, station_no=None, **kwargs):
+        '''Get cosmoz station calibrations.'''
+        if station_no is None:
+            raise RuntimeError("station_no is mandatory.")
+        station_no = int(station_no)
+        return_type = match_accept_mediatypes_to_provides(request,
+                                                          self.accept_types)
+        format = request.args.getlist('format', None)
+        if format:
+            format = next(iter(format))
+            if format in self.accept_types:
+                return_type = format
+        if return_type is None:
+            return ServiceUnavailable("Please use a valid accept type.")
+        if return_type == "application/json":
+            property_filter = request.args.getlist('property_filter', None)
+            if property_filter:
+                property_filter = str(next(iter(property_filter))).split(
+                    ',')
+        else:
+            # CSV and TXT get all properties, regardless of property_filter
+            property_filter = "*"
+        obs_params = {
+            "property_filter": property_filter,
+        }
+        json_safe = return_type == "application/json"
+        res = get_station_calibration_mongo(station_no, obs_params, json_safe)
+        if return_type == "application/json":
+            return json(res, status=200)
+        elif return_type == "applcation/csv":
+            raise NotImplementedError()
+            # return build_csv(res)
+        elif return_type == "text/plain":
+            headers = {'Content-Type': return_type}
+            jinja2 = get_jinja2_for_api(self.api)
+            if PY_36:
+                return jinja2.render_async('site_data_cal_txt.html', request,
+                                           headers=headers, **res)
+            else:
+                return jinja2.render('site_data_cal_txt.html', request,
+                                     headers=headers, **res)
+
+    @ns.doc('put_station_cal', params=OrderedDict([
+        ("name", {"description": "Station Name",
+          "required": True, "type": "string", "format": "text"}),
+    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    @ns.produces(accept_types)
+    async def put(self, request, *args, station_no=None, **kwargs):
+        '''Add cosmoz station calibration with station_no.'''
+        if station_no is None:
+            raise RuntimeError("station_no is mandatory.")
+        return text("OK")
+
 
 @ns.route('/stations/<station_no>/observations')
 @ns.param('station_no', "Station Number", type="number", format="integer")
 class Observations(Resource):
+    accept_types = ["application/json", "application/csv", "text/plain"]
     '''Gets a JSON representation of observation records in the COSMOZ database.'''
 
     @ns.doc('get_records', params=OrderedDict([
-        # ("username", {"description": "Your Cosmoz SQL DB username.", "required": True,
-        #               "type": "string", "format": "text"}),
-        #
-        # ("password", {"description": "Your Cosmoz SQL DB password.", "required": True,
-        #                  "type": "string", "format": "password"}),
         ("processing_level", {"description": "Query the table for this processing level.\n\n"
                               "(0, 1, 2, 3, or 4).",
                               "required": False, "type": "number", "format": "integer", "default": 4}),
@@ -221,24 +315,26 @@ class Observations(Resource):
                                       "Eg. `2h` or `3m` or `1d`",
                        "required": False, "type": "string", "format": "text"}),
         ("count", {"description": "Number of records to return.",
-                   "required": False, "type": "number", "format": "integer", "default": 1000}),
+                   "required": False, "type": "number", "format": "integer", "default": 2000}),
         ("offset", {"description": "Skip number of records before reading count.",
                     "required": False, "type": "number", "format": "integer", "default": 0}),
     ]))
-
+    @ns.produces(accept_types)
     async def get(self, request, *args, station_no=None, **kwargs):
         '''Get cosmoz records.'''
-
+        return_type = match_accept_mediatypes_to_provides(request,
+                                                          self.accept_types)
+        format = request.args.getlist('format', None)
+        if format:
+            format = next(iter(format))
+            if format in self.accept_types:
+                return_type = format
+        if return_type is None:
+            return_type = "application/json"
         nowtime = datetime.datetime.now().replace(tzinfo=pytz.UTC)
-        username = request.args.getlist('username', None)
-        password = request.args.getlist('password', None)
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         station_no = int(station_no)
-        if username:
-            username = next(iter(username))
-        if password:
-            password = next(iter(password))
         processing_level = request.args.getlist('processing_level', None)
         if processing_level:
             processing_level = int(next(iter(processing_level)))
@@ -265,7 +361,7 @@ class Observations(Resource):
         if count:
             count = int(next(iter(count)))
         else:
-            count = 1000
+            count = 2000
         offset = request.args.getlist('offset', None)
         if offset:
             offset = int(next(iter(offset)))
@@ -274,16 +370,31 @@ class Observations(Resource):
         obs_params = {
             "processing_level": processing_level,
             "property_filter": property_filter,
-            "username": username,
-            "password": password,
             "aggregate": aggregate,
             "startdate": startdate,
             "enddate": enddate,
             "count": count,
             "offset": offset,
         }
-        res = get_observations_influx(station_no, obs_params)
-        return json(res, status=200)
+        json_safe = return_type == "application/json"
+        res = get_observations_influx(station_no, obs_params, json_safe)
+        if return_type == "application/json":
+            return json(res, status=200)
+        elif return_type == "applcation/csv":
+            raise NotImplementedError()
+            # return build_csv(res)
+        elif return_type == "text/plain":
+            headers = {'Content-Type': return_type}
+            if processing_level == 0:
+                template = "raw_data_txt.html"
+            else:
+                template = "level{}_data_txt.html".format(processing_level)
+            jinja2 = get_jinja2_for_api(self.api)
+            if PY_36:
+                return jinja2.render_async(template, request,
+                                           headers=headers, **res)
+            else:
+                return jinja2.render(template, request, headers=headers, **res)
 
 
 @ns.route('/stations/<station_no>/lastobservations')
@@ -292,11 +403,6 @@ class LastObservations(Resource):
     '''Gets a JSON representation of recent observation records in the COSMOZ database.'''
 
     @ns.doc('get_records', params=OrderedDict([
-        # ("username", {"description": "Your Cosmoz SQL DB username.", "required": True,
-        #               "type": "string", "format": "text"}),
-        #
-        # ("password", {"description": "Your Cosmoz SQL DB password.", "required": True,
-        #                  "type": "string", "format": "password"}),
         ("processing_level", {"description": "Query the table for this processing level.\n\n"
                               "(0, 1, 2, 3, or 4).",
                               "required": False, "type": "number", "format": "integer", "default": 4}),
@@ -309,16 +415,9 @@ class LastObservations(Resource):
 
     async def get(self, request, *args, station_no=None, **kwargs):
         '''Get recent cosmoz records.'''
-
-        username = request.args.getlist('username', None)
-        password = request.args.getlist('password', None)
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         station_no = int(station_no)
-        if username:
-            username = next(iter(username))
-        if password:
-            password = next(iter(password))
         processing_level = request.args.getlist('processing_level', None)
         if processing_level:
             processing_level = int(next(iter(processing_level)))
@@ -335,8 +434,6 @@ class LastObservations(Resource):
         obs_params = {
             "processing_level": processing_level,
             "property_filter": property_filter,
-            "username": username,
-            "password": password,
             "count": count,
         }
         res = get_last_observations_influx(station_no, obs_params)

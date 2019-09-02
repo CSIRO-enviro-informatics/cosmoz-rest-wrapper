@@ -4,27 +4,14 @@ from collections import OrderedDict
 import bson
 from influxdb import InfluxDBClient
 from pymongo import MongoClient
-from . import config
+import config
+from util import datetime_to_iso, datetime_from_iso, datetime_to_date_string
 USE_MSSQL = False
 if USE_MSSQL:
     from pymssql import _mssql as mssql
-    from src.db import CosmozSQLConnection
+    from db import CosmozSQLConnection
 influx_client = InfluxDBClient(config.INFLUXDB_HOST, config.INFLUXDB_PORT, 'root', 'root', 'cosmoz', timeout=30)
 
-def datetime_to_iso(_d, include_micros=None):
-    if include_micros is None:
-        include_micros = _d.microsecond != 0
-    if include_micros:
-        return _d.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    else:
-        return _d.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def datetime_from_iso(_d):
-    try:
-        return datetime.datetime.strptime(_d, "%Y-%m-%dT%H:%M:%S.%fZ")
-    except Exception:
-        return datetime.datetime.strptime(_d, "%Y-%m-%dT%H:%M:%SZ")
 
 obsv_variable_to_column_map = {
     'timestamp': 'Timestamp',
@@ -76,7 +63,7 @@ station_variable_to_column_map = {
 
 station_column_to_variable_map = { v: k for k,v in station_variable_to_column_map.items() }
 
-def get_station_mongo(station_number, params):
+def get_station_mongo(station_number, params, json_safe=True):
     client = MongoClient(config.MONGODB_HOST, config.MONGODB_PORT)  # 27017
     station_number = int(station_number)
     params = params or {}
@@ -110,8 +97,66 @@ def get_station_mongo(station_number, params):
         if isinstance(v, datetime.datetime):
             resp[r] = datetime_to_iso(v)
         elif isinstance(v, bson.decimal128.Decimal128):
-            resp[r] = v.to_decimal()
+            g = v.to_decimal()
+            if json_safe and g.is_nan():
+                g = "NaN"
+            resp[r] = g
     return resp
+
+def get_station_calibration_mongo(station_number, params, json_safe=True):
+    client = MongoClient(config.MONGODB_HOST, config.MONGODB_PORT)  # 27017
+    station_number = int(station_number)
+    params = params or {}
+    property_filter = params.get('property_filter', [])
+    if property_filter and len(property_filter) > 0:
+        if '*' in property_filter:
+            select_filter = None
+        else:
+            select_filter = OrderedDict({v: True for v in property_filter})
+            if "site_no" not in select_filter:
+                select_filter['site_no'] = True
+            select_filter.move_to_end('site_no', last=False)
+            if "_id" not in select_filter:
+                select_filter['_id'] = False
+            select_filter.move_to_end('_id', last=False)
+    else:
+        select_filter = None
+    if select_filter is None:
+        select_filter = {'_id': False}
+    db = client.cosmoz
+    stations_calibration_collection = db.stations_calibration
+    rows = stations_calibration_collection.find({'site_no': station_number}, projection=select_filter)
+    if rows is None:
+        raise LookupError("Cannot find site calibration.")
+
+    #resp = { station_column_to_variable_map[c]: v for c,v in row.items() if c in station_column_to_variable_map.keys() }
+    # if 'installation_date' in resp:
+    #     resp['installation_date'] = datetime_to_iso(resp['installation_date'])
+    responses = []
+    for resp in rows:
+        if "_id" in resp:
+            del resp['id']
+        for r,v in resp.items():
+            if isinstance(v, datetime.datetime):
+                resp[r] = datetime_to_date_string(v)
+            elif isinstance(v, bson.decimal128.Decimal128):
+                g = v.to_decimal()
+                if json_safe and g.is_nan():
+                    g = "NaN"
+                resp[r] = g
+
+
+        responses.append(resp)
+    count = len(responses)
+    resp = {
+        'meta': {
+            'count': count,
+            'offset': 0,
+        },
+        'calibrations': responses,
+    }
+    return resp
+
 
 
 if USE_MSSQL:
@@ -308,12 +353,12 @@ def get_last_observations_influx(site_number, params):
     }
     return resp
 
-def get_observations_influx(site_number, params):
+def get_observations_influx(site_number, params, json_safe=True):
     site_number = int(site_number)
     params = params or {}
     processing_level = params.get('processing_level', 3)
     property_filter = params.get('property_filter', [])
-    count = params.get('count', 1000)
+    count = params.get('count', 2000)
     offset = params.get('offset', 0)
     aggregate = params.get('aggregate', None)
     if aggregate == "" or aggregate == 0:
@@ -489,3 +534,4 @@ if USE_MSSQL:
             'observations': observations,
         }
         return resp
+
