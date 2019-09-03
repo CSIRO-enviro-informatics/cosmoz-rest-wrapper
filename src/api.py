@@ -166,7 +166,7 @@ class Stations(Resource):
 @ns.param('station_no', "Station Number", type="number", format="integer")
 @ns.response(404, 'Station not found')
 class Station(Resource):
-    accept_types = ["application/json", "application/csv", "text/plain"]
+    accept_types = ["application/json", "text/csv", "text/plain"]
     '''Gets site date for station_no.'''
 
     @ns.doc('get_station', params=OrderedDict([
@@ -224,11 +224,11 @@ class Station(Resource):
             raise RuntimeError("station_no is mandatory.")
         return text("OK")
 
-@ns.route('/stations_calibration/<station_no>')
+@ns.route('/stations/<station_no>/calibration')
 @ns.param('station_no', "Station Number", type="number", format="integer")
 @ns.response(404, 'Station Calibration not found')
 class StationCalibration(Resource):
-    accept_types = ["application/json", "application/csv", "text/plain"]
+    accept_types = ["application/json", "text/csv", "text/plain"]
     '''Gets site date for station_no.'''
 
     @ns.doc('get_station_cal', params=OrderedDict([
@@ -267,12 +267,16 @@ class StationCalibration(Resource):
         res = get_station_calibration_mongo(station_no, obs_params, json_safe)
         if return_type == "application/json":
             return json(res, status=200)
-        elif return_type == "applcation/csv":
-            raise NotImplementedError()
-            # return build_csv(res)
+        headers = {'Content-Type': return_type}
+        jinja2 = get_jinja2_for_api(self.api)
+        if return_type == "text/csv":
+            if PY_36:
+                return jinja2.render_async('site_data_cal_csv.html', request,
+                                           headers=headers, **res)
+            else:
+                return jinja2.render('site_data_cal_csv.html', request,
+                                     headers=headers, **res)
         elif return_type == "text/plain":
-            headers = {'Content-Type': return_type}
-            jinja2 = get_jinja2_for_api(self.api)
             if PY_36:
                 return jinja2.render_async('site_data_cal_txt.html', request,
                                            headers=headers, **res)
@@ -295,7 +299,7 @@ class StationCalibration(Resource):
 @ns.route('/stations/<station_no>/observations')
 @ns.param('station_no', "Station Number", type="number", format="integer")
 class Observations(Resource):
-    accept_types = ["application/json", "application/csv", "text/plain"]
+    accept_types = ["application/json", "text/csv", "text/plain"]
     '''Gets a JSON representation of observation records in the COSMOZ database.'''
 
     @ns.doc('get_records', params=OrderedDict([
@@ -380,16 +384,24 @@ class Observations(Resource):
         res = get_observations_influx(station_no, obs_params, json_safe)
         if return_type == "application/json":
             return json(res, status=200)
-        elif return_type == "applcation/csv":
-            raise NotImplementedError()
-            # return build_csv(res)
+        headers = {'Content-Type': return_type}
+        jinja2 = get_jinja2_for_api(self.api)
+        if return_type == "text/csv":
+            if processing_level == 0:
+                template = "raw_data_csv.html"
+            else:
+                template = "level{}_data_csv.html".format(processing_level)
+            if PY_36:
+                return jinja2.render_async(template, request,
+                                           headers=headers, **res)
+            else:
+                return jinja2.render(template, request, headers=headers, **res)
         elif return_type == "text/plain":
             headers = {'Content-Type': return_type}
             if processing_level == 0:
                 template = "raw_data_txt.html"
             else:
                 template = "level{}_data_txt.html".format(processing_level)
-            jinja2 = get_jinja2_for_api(self.api)
             if PY_36:
                 return jinja2.render_async(template, request,
                                            headers=headers, **res)

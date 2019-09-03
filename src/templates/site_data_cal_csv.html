@@ -1,0 +1,3 @@
+date, label, loc, depth, vol, total_wet, total_dry, tare, soil_wet, soil_dry, gwc, bd, vwc
+{% for c in calibrations %}{{c.date}}, "{{c.label}}", "{{c.loc}}", "{{c.depth}}", "{{c.vol}}", {{"%.2f"|format(c.total_wet)}}, {{"%.2f"|format(c.total_dry)}}, {{"%.2f"|format(c.tare)}}, {{"%.2f"|format(c.soil_wet)}}, {{"%.2f"|format(c.soil_dry)}}, {{"%.2f"|format(c.gwc)}}, {{"%.2f"|format(c.bd)}}, {{"%.2f"|format(c.vwc)}}
+{% endfor %}
