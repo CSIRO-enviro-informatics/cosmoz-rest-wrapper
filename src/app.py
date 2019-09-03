@@ -40,8 +40,14 @@ load_env()
 #JSONEncoder_newdefault()
 OVERRIDE_SERVER_NAME = getenv("SANIC_OVERRIDE_SERVER_NAME", "localhost:9001")
 PROXY_ROUTE_BASE = getenv("SANIC_PROXY_ROUTE_BASE", "")
+SANIC_SERVER_NAME = getenv("SANIC_SERVER_NAME", "")
 app = Sanic(__name__)
 app.config.SWAGGER_UI_DOC_EXPANSION = "full"
+if len(OVERRIDE_SERVER_NAME) and len(SANIC_SERVER_NAME) < 1:
+   SANIC_SERVER_NAME = OVERRIDE_SERVER_NAME.split(":")[0]
+
+if len(SANIC_SERVER_NAME):
+    app.config['SERVER_NAME'] = SANIC_SERVER_NAME
 spf = SanicPluginsFramework(app)
 cors, cors_reg = spf.register_plugin(cors, origins='*')
 ctx = spf.register_plugin(contextualize)
@@ -67,12 +73,9 @@ async def apikey(request, context):
     if not state or ('access_token_session_key' not in state):
         after_this = context.url_for('apikey', _external=True, _scheme='http',
                                   _server=OVERRIDE_SERVER_NAME)
-        redir_to = app.url_for('create_oauth', _external=True, _scheme='http',
-                               _server=OVERRIDE_SERVER_NAME)
+        redir_to = app.url_for('create_oauth')
         if len(PROXY_ROUTE_BASE):
             after_this = after_this.replace("/apikey", "/{}apikey".format(
-                PROXY_ROUTE_BASE))
-            redir_to = redir_to.replace("/create_oauth", "/{}create_oauth".format(
                 PROXY_ROUTE_BASE))
         redir_to = "{}?after_authorized={}".format(redir_to, quote_plus(after_this))
         return redirect(redir_to)
