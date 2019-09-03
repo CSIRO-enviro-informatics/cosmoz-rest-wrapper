@@ -90,7 +90,9 @@ def create_client(app, oauth=None, remote=None):
     @remote.autoauthorize
     async def create_oauth(request, context):
         try:
-            callback = request.url_for('authorized')
+            # don't use request.url_for for now, it adds an extra port section
+            #callback = request.url_for('authorized')
+            raise AttributeError('authorized')
         except AttributeError:
             override_server_name = getenv("SANIC_OVERRIDE_SERVER_NAME", "localhost:9001")
             callback = request.app.url_for('authorized', _external=True, _scheme='http', _server=override_server_name)
