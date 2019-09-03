@@ -39,13 +39,15 @@ load_env()
 #from src.functions import JSONEncoder_newdefault
 #JSONEncoder_newdefault()
 OVERRIDE_SERVER_NAME = getenv("SANIC_OVERRIDE_SERVER_NAME", "localhost:9001")
+print("Using OVERRIDE_SERVER_NAME: {}".format(OVERRIDE_SERVER_NAME))
 PROXY_ROUTE_BASE = getenv("SANIC_PROXY_ROUTE_BASE", "")
+print("Using SANIC_PROXY_ROUTE_BASE: {}".format(PROXY_ROUTE_BASE))
 SANIC_SERVER_NAME = getenv("SANIC_SERVER_NAME", "")
 app = Sanic(__name__)
 app.config.SWAGGER_UI_DOC_EXPANSION = "full"
 if len(OVERRIDE_SERVER_NAME) and len(SANIC_SERVER_NAME) < 1:
    SANIC_SERVER_NAME = OVERRIDE_SERVER_NAME.split(":")[0]
-
+print("Using SANIC_SERVER_NAME: {}".format(SANIC_SERVER_NAME))
 if len(SANIC_SERVER_NAME):
     app.config['SERVER_NAME'] = SANIC_SERVER_NAME
 spf = SanicPluginsFramework(app)

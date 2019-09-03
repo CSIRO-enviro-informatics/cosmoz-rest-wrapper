@@ -97,6 +97,7 @@ def create_client(app, oauth=None, remote=None):
         proxy_route_base = getenv("SANIC_PROXY_ROUTE_BASE", "")
         if len(proxy_route_base):
             callback = callback.replace("/authorized", "/{}authorized".format(proxy_route_base))
+        print("In AutoAuthorize. Asking for request_token using callback: {}".format(callback))
         after_this = request.args.get("after_authorized", "/apikey")
         state = {"remote_app": 'csiro-to-ldap', "after_authorized": after_this}
         #Oauth1 cannot put state in the request, we need to put it in the session
