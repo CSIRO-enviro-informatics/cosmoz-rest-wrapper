@@ -94,6 +94,9 @@ def create_client(app, oauth=None, remote=None):
         except AttributeError:
             override_server_name = getenv("SANIC_OVERRIDE_SERVER_NAME", "localhost:9001")
             callback = request.app.url_for('authorized', _external=True, _scheme='http', _server=override_server_name)
+        proxy_route_base = getenv("SANIC_PROXY_ROUTE_BASE", "")
+        if len(proxy_route_base):
+            callback = callback.replace("/authorized", "/{}authorized".format(proxy_route_base))
         after_this = request.args.get("after_authorized", "/apikey")
         state = {"remote_app": 'csiro-to-ldap', "after_authorized": after_this}
         #Oauth1 cannot put state in the request, we need to put it in the session
