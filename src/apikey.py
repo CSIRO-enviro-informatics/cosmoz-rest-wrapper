@@ -91,8 +91,8 @@ def put_apikey_mongo(apikey, params, renew=False):
         criteria['access_token'] = params['access_token']
     db = client.cosmoz
     api_keys_collection = db.api_keys
-    row = api_keys_collection.update(criteria, params, upsert=(not renew))
-    if row is None or row['n'] < 1:
+    row = api_keys_collection.update_one(criteria, {"$set": params}, upsert=(not renew))
+    if not row:
         raise LookupError("Cannot set apikey.")
     resp = params
     return resp
