@@ -75,9 +75,12 @@ async def apikey(request, context):
     if not state or ('access_token_session_key' not in state):
         after_this = context.url_for('apikey', _external=True, _scheme='http',
                                   _server=OVERRIDE_SERVER_NAME)
-        redir_to = app.url_for('create_oauth')
+        redir_to = app.url_for('create_oauth', _external=True, _scheme='http',
+                               _server=OVERRIDE_SERVER_NAME)
         if len(PROXY_ROUTE_BASE):
             after_this = after_this.replace("/apikey", "/{}apikey".format(
+                PROXY_ROUTE_BASE))
+            redir_to = redir_to.replace("/create_oauth", "/{}create_oauth".format(
                 PROXY_ROUTE_BASE))
         redir_to = "{}?after_authorized={}".format(redir_to, quote_plus(after_this))
         return redirect(redir_to)
