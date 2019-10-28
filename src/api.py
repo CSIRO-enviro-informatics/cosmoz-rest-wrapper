@@ -109,6 +109,20 @@ def match_accept_mediatypes_to_provides(request, provides):
     for i in order:
         if i in provides:
             return i
+    # try to match wildcards
+    for i in order:
+        if i == "*/*":
+            return provides[0]
+        elif i.endswith("/*"):
+            check_for = i.replace("/*", "/")
+            for j in provides:
+                if j.startswith(check_for):
+                    return j
+        elif i.startswith("*/"):
+            check_for = i.replace("*/", "/")
+            for j in provides:
+                if j.endswith(check_for):
+                    return j
     return None
 
 @ns.route('/stations')
