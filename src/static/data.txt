@@ -3,9 +3,7 @@ The CosmOz data are freely available for use however we request that you contact
 
 Raw Data
 This is the data as it comes in from each station via satellite.
-
-'YYYY-MM-DD' is Date
-'HH:MM' is time in UTC
+'UTC_TIMESTAMP' is Date and Time of gathered measurement, in ISO8601 Format.
 'COUNT' is the total neutron count for the time period
 'PRESS' is Atmospheric pressure at the station (low resolution)
 'I_TEM' is temperature inside the logger box
@@ -33,8 +31,7 @@ Flag 6 = problem with NMDB.eu data
 Level 2
 This data level includes corrections for atmospheric pressure, humidity, and incoming neutron intensity changes. See Hawdon et al. (2014) for details.
 
-'YYYY-MM-DD' is Date
-'HH:MM' is time in UTC
+'UTC_TIMESTAMP' is Date and Time of gathered measurement, in ISO8601 Format.
 'PRESS CORR' is the atmospheric pressure correction applied
 'WVCORR' is the atmospheric humidity correction applied
 'INTENSITY CORR' is the incoming neutron intensity correction applied
@@ -44,8 +41,7 @@ This data level includes corrections for atmospheric pressure, humidity, and inc
 Level 3
 This data level is where soil moisture content, the effective measurement depth and rainfall are calculated. See Hawdon et al. (2014) for details.
 
-'YYYY-MM-DD' is Date
-'HH:MM' is time in UTC
+'UTC_TIMESTAMP' is Date and Time of gathered measurement, in ISO8601 Format.
 'SOILMOIST' is the calculated soil moisture content.
 'DEPTH' is the calculated effective measurement depth.
 'RAIN' the total rainfall (mm)
@@ -54,8 +50,7 @@ This data level is where soil moisture content, the effective measurement depth 
 Level 4
 This is the final dataset with all flagged data removed.
 
-'YYYY-MM-DD' is Date
-'HH:MM' is time in UTC
+'UTC_TIMESTAMP' is Date and Time of gathered measurement, in ISO8601 Format.
 'SOILMOIST' is the calculated soil moisture content.
 'DEPTH' is the calculated effective measurement depth.
 'RAIN' the total rainfall (mm)

@@ -17,7 +17,7 @@ limitations under the License.
 import sys
 from collections import OrderedDict
 import datetime
-import pytz
+from datetime import datetime, timezone, timedelta
 from sanic_restplus import Api, Resource, fields
 from sanic.response import json, text
 from sanic.exceptions import ServiceUnavailable
@@ -49,6 +49,9 @@ api = Api(title="CSIRO Cosmoz REST Interface",
           default_mediatype="application/json",
           additional_css="/static/material_swagger.css")
 ns = api.default_namespace
+
+MAX_RETURN_COUNT = 2147483647  # Highest 32bit signed int
+EARLIEST_DATETIME = datetime.min.replace(year=1900, tzinfo=timezone.utc)
 
 def get_jinja2_for_api(_a):
     if _a.spf_reg is None:
@@ -146,12 +149,12 @@ class Stations(Resource):
             property_filter = str(next(iter(property_filter))).split(',')
         count = request.args.getlist('count', None)
         if count:
-            count = int(next(iter(count)))
+            count = min(int(next(iter(count))), MAX_RETURN_COUNT)
         else:
             count = 1000
         offset = request.args.getlist('offset', None)
         if offset:
-            offset = int(next(iter(offset)))
+            offset = min(int(next(iter(offset))), MAX_RETURN_COUNT)
         else:
             offset = 0
         obs_params = {
@@ -196,6 +199,8 @@ class Station(Resource):
         station_no = int(station_no)
         return_type = match_accept_mediatypes_to_provides(request, self.accept_types)
         format = request.args.getlist('format', None)
+        if not format:
+            format = request.args.getlist('_format', None)
         if format:
             format = next(iter(format))
             if format in self.accept_types:
@@ -260,6 +265,8 @@ class StationCalibration(Resource):
         return_type = match_accept_mediatypes_to_provides(request,
                                                           self.accept_types)
         format = request.args.getlist('format', None)
+        if not format:
+            format = request.args.getlist('_format', None)
         if format:
             format = next(iter(format))
             if format in self.accept_types:
@@ -343,13 +350,14 @@ class Observations(Resource):
         return_type = match_accept_mediatypes_to_provides(request,
                                                           self.accept_types)
         format = request.args.getlist('format', None)
+        if not format:
+            format = request.args.getlist('_format', None)
         if format:
             format = next(iter(format))
             if format in self.accept_types:
                 return_type = format
         if return_type is None:
             return_type = "application/json"
-        nowtime = datetime.datetime.now().replace(tzinfo=pytz.UTC)
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         station_no = int(station_no)
@@ -364,27 +372,42 @@ class Observations(Resource):
         aggregate = request.args.getlist('aggregate', None)
         if aggregate:
             aggregate = str(next(iter(aggregate)))
+        nowtime = datetime.utcnow().astimezone(timezone.utc)
         startdate = request.args.getlist('startdate', None)
         if startdate:
             startdate = next(iter(startdate))
         else:
-            startdate = (nowtime + datetime.timedelta(days=-365))\
-                .replace(hour=0, minute=0, second=0, microsecond=0)
+            if return_type == "application/json":
+                startdate = (nowtime + timedelta(days=-365)) \
+                    .replace(hour=0, minute=0, second=0, microsecond=0)
+            else:
+                startdate = EARLIEST_DATETIME
         enddate = request.args.getlist('enddate', None)
         if enddate:
             enddate = next(iter(enddate))
         else:
             enddate = nowtime.replace(hour=23, minute=59, second=59, microsecond=0)
         count = request.args.getlist('count', None)
+        if return_type == "application/json":
+            fallback_count = 2000
+        else:
+            fallback_count = MAX_RETURN_COUNT
         if count:
-            count = int(next(iter(count)))
+            try:
+                count = min(int(next(iter(count))), MAX_RETURN_COUNT)
+            except ValueError:
+                count = fallback_count
         else:
-            count = 2000
+            count = fallback_count
         offset = request.args.getlist('offset', None)
+        fallback_offset = 0
         if offset:
-            offset = int(next(iter(offset)))
+            try:
+                offset = min(int(next(iter(offset))), MAX_RETURN_COUNT)
+            except ValueError:
+                offset = fallback_offset
         else:
-            offset = 0
+            offset = fallback_offset
         obs_params = {
             "processing_level": processing_level,
             "property_filter": property_filter,

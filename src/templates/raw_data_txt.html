@@ -1,4 +1,4 @@
-YYYY-MM-DDTHH:MM:SSZ       COUNT       PRESS    I_TEM     I_RH     BATT    C_TEM     C_RH     RAIN     TDR1     TDR2     TDR3    PRES2   EX_TEM    EX_RH
-                 UTC         /hr          mb        C        %        V        C        %    COUNT       us       us       us       mb        C        %
+UTC_TIMESTAMP              COUNT       PRESS    I_TEM     I_RH     BATT    C_TEM     C_RH    RAIN      TDR1     TDR2     TDR3    PRES2   EX_TEM    EX_RH
+YYYY-MM-DDTHH:MM:SSZ         /hr          mb        C        %        V        C        %    COUNT       us       us       us       mb        C        %
 {% for o in observations %}{{(o.time).rjust(20)}}  {{"%10.3f"|format(o.count)}}  {{"%10.3f"|format(o.pressure1)}}  {{"%7.3f"|format(o.internal_temperature)}}  {{"%7.3f"|format(o.internal_humidity)}}  {{"%7.3f"|format(o.battery)}}  {{"%7.3f"|format(o.tube_temperature)}}  {{"%7.3f"|format(o.tube_humidity)}}  {{"%7.3f"|format(o.rain)}}  {{"%7.3f"|format(o.vwc1)}}  {{"%7.3f"|format(o.vwc2)}}  {{"%7.3f"|format(o.vwc3)}}  {{"%7.3f"|format(o.pressure2)}}  {{"%7.3f"|format(o.external_temperature)}}  {{"%7.3f"|format(o.external_humidity)}}
 {% endfor %}

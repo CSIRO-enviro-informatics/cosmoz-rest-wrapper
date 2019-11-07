@@ -1,4 +1,4 @@
-YYYY-MM-DDTHH:MM:SSZ       COUNT     PRESS    WVCORR INTENSITY CORRCOUNT     RAIN   FLAG
-                 UTC         /hr      CORR                CORR              COUNT
-{% for o in observations %}{{(o.time).rjust(20)}}  {{"%10.3f"|format(o.count)}}  {{"%8.3f"|format(o.press_corr)}}  {{"%8.3f"|format(o.wv_corr)}}  {{"%8.3f"|format(o.intensity_corr)}}  {{"%8.3f"|format(o.corr_count)}}  {{"%7.3f"|format(o.rain)}}  {{(o.flag).rjust(4)}}
+UTC_TIMESTAMP              COUNT     PRESS    WVCORR INTENSITY  CORRCOUNT     RAIN   FLAG
+YYYY-MM-DDTHH:MM:SSZ         /hr      CORR                CORR        /hr     COUNT
+{% for o in observations %}{{(o.time).rjust(20)}}  {{"%10.3f"|format(o.count)}}  {{"%8.3f"|format(o.press_corr)}}  {{"%8.3f"|format(o.wv_corr)}}  {{"%8.3f"|format(o.intensity_corr)}}  {{"%9.3f"|format(o.corr_count)}}  {{"%7.3f"|format(o.rain)}}  {{(o.flag).rjust(4)}}
 {% endfor %}
