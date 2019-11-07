@@ -46,7 +46,12 @@ SANIC_SERVER_NAME = getenv("SANIC_SERVER_NAME", "")
 app = Sanic(__name__)
 app.config.SWAGGER_UI_DOC_EXPANSION = "full"
 if len(OVERRIDE_SERVER_NAME) and len(SANIC_SERVER_NAME) < 1:
-   SANIC_SERVER_NAME = OVERRIDE_SERVER_NAME.split(":")[0]
+   OR_SERVER_NAME_PARTS = OVERRIDE_SERVER_NAME.split(":")
+   SANIC_SERVER_NAME = OR_SERVER_NAME_PARTS[0]
+   if len(OR_SERVER_NAME_PARTS) > 1:
+       port = int(OR_SERVER_NAME_PARTS[1])
+       if port != 80 and port != 443:
+           SANIC_SERVER_NAME = "{}:{}".format(SANIC_SERVER_NAME, str(port))
 print("Using SANIC_SERVER_NAME: {}".format(SANIC_SERVER_NAME))
 if len(SANIC_SERVER_NAME):
     app.config['SERVER_NAME'] = SANIC_SERVER_NAME
@@ -128,10 +133,10 @@ async def checkaccesskey(request, api_key):
 
 
 if __name__ == "__main__":
-    override_server_name = getenv('SANIC_OVERRIDE_SERVER_NAME', "localhost:9001")
-    if ":" in override_server_name:
-        host, port = override_server_name.split(":", 1)
+    server_name = OVERRIDE_SERVER_NAME or "localhost:9001"
+    if ":" in server_name:
+        host, port = server_name.split(":", 1)
     else:
-        host = override_server_name
+        host = server_name
         port = 9001
     app.run(host=host, port=port, debug=True, auto_reload=False)
