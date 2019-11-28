@@ -19,7 +19,7 @@ from collections import OrderedDict
 import datetime
 from datetime import datetime, timezone, timedelta
 from sanic_restplus import Api, Resource, fields
-from sanic.response import json, text
+from sanic.response import json, text, stream
 from sanic.exceptions import ServiceUnavailable
 from sanic_jinja2_spf import sanic_jinja2
 
@@ -147,6 +147,7 @@ class Stations(Resource):
         property_filter = request.args.getlist('property_filter', None)
         if property_filter:
             property_filter = str(next(iter(property_filter))).split(',')
+            property_filter = [p for p in property_filter if len(p)]
         count = request.args.getlist('count', None)
         if count:
             count = min(int(next(iter(count))), MAX_RETURN_COUNT)
@@ -211,6 +212,7 @@ class Station(Resource):
             property_filter = request.args.getlist('property_filter', None)
             if property_filter:
                 property_filter = str(next(iter(property_filter))).split(',')
+                property_filter = [p for p in property_filter if len(p)]
         else:
             # CSV and TXT get all properties, regardless of property_filter
             property_filter = "*"
@@ -276,8 +278,8 @@ class StationCalibration(Resource):
         if return_type == "application/json":
             property_filter = request.args.getlist('property_filter', None)
             if property_filter:
-                property_filter = str(next(iter(property_filter))).split(
-                    ',')
+                property_filter = str(next(iter(property_filter))).split(',')
+                property_filter = [p for p in property_filter if len(p)]
         else:
             # CSV and TXT get all properties, regardless of property_filter
             property_filter = "*"
@@ -291,19 +293,15 @@ class StationCalibration(Resource):
         headers = {'Content-Type': return_type}
         jinja2 = get_jinja2_for_api(self.api)
         if return_type == "text/csv":
-            if PY_36:
-                return jinja2.render_async('site_data_cal_csv.html', request,
-                                           headers=headers, **res)
-            else:
-                return jinja2.render('site_data_cal_csv.html', request,
-                                     headers=headers, **res)
+            template = 'site_data_cal_csv.html'
         elif return_type == "text/plain":
-            if PY_36:
-                return jinja2.render_async('site_data_cal_txt.html', request,
-                                           headers=headers, **res)
-            else:
-                return jinja2.render('site_data_cal_txt.html', request,
-                                     headers=headers, **res)
+            template = 'site_data_cal_txt.html'
+        else:
+            raise RuntimeError("Cannot determine template name to use for response type.")
+        if PY_36:
+            return await jinja2.render_async(template, request, headers=headers, **res)
+        else:
+            return jinja2.render(template, request, headers=headers, **res)
 
     @ns.doc('put_station_cal', params=OrderedDict([
         ("name", {"description": "Station Name",
@@ -312,6 +310,39 @@ class StationCalibration(Resource):
     @ns.produces(accept_types)
     async def put(self, request, *args, station_no=None, **kwargs):
         '''Add cosmoz station calibration with station_no.'''
+        if station_no is None:
+            raise RuntimeError("station_no is mandatory.")
+        return text("OK")
+
+
+    @ns.doc('put_station', params=OrderedDict([
+        ("name", {"description": "Station Name",
+          "required": True, "type": "string", "format": "text"}),
+        ("latitude", {"description": "Latitude (in decimal degrees)",
+                  "required": True, "type": "string", "format": "number"}),
+        ("longitude", {"description": "Longitude (in decimal degrees)",
+                      "required": True, "type": "string", "format": "number"}),
+    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    @ns.produces(accept_types)
+    async def put(self, request, *args, station_no=None, **kwargs):
+        '''Add cosmoz station.'''
+        # Station number is _not_ generated.
+        if station_no is None:
+            raise RuntimeError("station_no is mandatory.")
+        return text("OK")
+
+    @ns.doc('patch_station', params=OrderedDict([
+        ("name", {"description": "Station Name",
+          "required": True, "type": "string", "format": "text"}),
+        ("latitude", {"description": "Latitude (in decimal degrees)",
+                  "required": True, "type": "string", "format": "number"}),
+        ("longitude", {"description": "Longitude (in decimal degrees)",
+                      "required": True, "type": "string", "format": "number"}),
+    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    @ns.produces(accept_types)
+    async def patch(self, request, *args, station_no=None, **kwargs):
+        '''Update cosmoz station.'''
+        # Station number is required
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         return text("OK")
@@ -366,9 +397,14 @@ class Observations(Resource):
             processing_level = int(next(iter(processing_level)))
         else:
             processing_level = 4
-        property_filter = request.args.getlist('property_filter', None)
-        if property_filter:
-            property_filter = str(next(iter(property_filter))).split(',')
+        not_json = return_type != "application/json"
+        if not not_json:
+            property_filter = request.args.getlist('property_filter', None)
+            if property_filter:
+                property_filter = str(next(iter(property_filter))).split(',')
+                property_filter = [p for p in property_filter if len(p)]
+        else:
+            property_filter = "*"
         aggregate = request.args.getlist('aggregate', None)
         if aggregate:
             aggregate = str(next(iter(aggregate)))
@@ -377,7 +413,7 @@ class Observations(Resource):
         if startdate:
             startdate = next(iter(startdate))
         else:
-            if return_type == "application/json":
+            if not not_json:
                 startdate = (nowtime + timedelta(days=-365)) \
                     .replace(hour=0, minute=0, second=0, microsecond=0)
             else:
@@ -388,7 +424,7 @@ class Observations(Resource):
         else:
             enddate = nowtime.replace(hour=23, minute=59, second=59, microsecond=0)
         count = request.args.getlist('count', None)
-        if return_type == "application/json":
+        if not not_json:
             fallback_count = 2000
         else:
             fallback_count = MAX_RETURN_COUNT
@@ -417,10 +453,13 @@ class Observations(Resource):
             "count": count,
             "offset": offset,
         }
-        json_safe = return_type == "application/json"
-        res = get_observations_influx(station_no, obs_params, json_safe)
-        if return_type == "application/json":
-            return json(res, status=200)
+        if not not_json:
+            try:
+                res = get_observations_influx(station_no, obs_params, True)
+                return json(res, status=200)
+            except Exception as e:
+                print(e)
+                raise e
         headers = {'Content-Type': return_type}
         jinja2 = get_jinja2_for_api(self.api)
         if return_type == "text/csv":
@@ -428,29 +467,39 @@ class Observations(Resource):
                 template = "raw_data_csv.html"
             else:
                 template = "level{}_data_csv.html".format(processing_level)
-            if PY_36:
-                return jinja2.render_async(template, request,
-                                           headers=headers, **res)
-            else:
-                return jinja2.render(template, request, headers=headers, **res)
+            headers['Content-Disposition'] = "attachment; filename=\"station{}_level{}.csv\"" \
+                .format(str(station_no), str(processing_level))
         elif return_type == "text/plain":
             headers = {'Content-Type': return_type}
             if processing_level == 0:
                 template = "raw_data_txt.html"
             else:
                 template = "level{}_data_txt.html".format(processing_level)
+            headers['Content-Disposition'] = "attachment; filename=\"station{}_level{}.txt\"" \
+                .format(str(station_no), str(processing_level))
+        else:
+            raise RuntimeError("Invalid Return Type")
+
+        async def streaming_fn(response):
+            nonlocal template
+            nonlocal station_no
+            nonlocal obs_params
+            nonlocal request
+            res = get_observations_influx(station_no, obs_params, False)
             if PY_36:
-                return jinja2.render_async(template, request,
-                                           headers=headers, **res)
+                r = await jinja2.render_string_async(template, request, **res)
             else:
-                return jinja2.render(template, request, headers=headers, **res)
+                r = jinja2.render_string(template, request, **res)
+            await response.write(r)
+
+        return stream(streaming_fn, status=200, headers=headers, content_type=return_type)
 
 
 @ns.route('/stations/<station_no>/lastobservations')
 @ns.param('station_no', "Station Number", type="number", format="integer")
 class LastObservations(Resource):
     '''Gets a JSON representation of recent observation records in the COSMOZ database.'''
-
+    accept_types = ["application/json", "text/csv", "text/plain"]
     @ns.doc('get_records', params=OrderedDict([
         ("processing_level", {"description": "Query the table for this processing level.\n\n"
                               "(0, 1, 2, 3, or 4).",
@@ -461,9 +510,20 @@ class LastObservations(Resource):
         ("count", {"description": "Number of records to return.",
                    "required": False, "type": "number", "format": "integer", "default": 1}),
     ]))
-
+    @ns.produces(accept_types)
     async def get(self, request, *args, station_no=None, **kwargs):
         '''Get recent cosmoz records.'''
+        return_type = match_accept_mediatypes_to_provides(request,
+                                                          self.accept_types)
+        format = request.args.getlist('format', None)
+        if not format:
+            format = request.args.getlist('_format', None)
+        if format:
+            format = next(iter(format))
+            if format in self.accept_types:
+                return_type = format
+        if return_type is None:
+            return_type = "application/json"
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         station_no = int(station_no)
@@ -472,18 +532,70 @@ class LastObservations(Resource):
             processing_level = int(next(iter(processing_level)))
         else:
             processing_level = 4
-        property_filter = request.args.getlist('property_filter', None)
-        if property_filter:
-            property_filter = str(next(iter(property_filter))).split(',')
-        count = request.args.getlist('count', None)
-        if count:
-            count = int(next(iter(count)))
+
+        not_json = return_type != "application/json"
+        if not not_json:
+            property_filter = request.args.getlist('property_filter', None)
+            if property_filter:
+                property_filter = str(next(iter(property_filter))).split(',')
+                property_filter = [p for p in property_filter if len(p)]
         else:
-            count = 1000
+            property_filter = "*"
+        count = request.args.getlist('count', None)
+        if not not_json:
+            fallback_count = 2000
+        else:
+            fallback_count = MAX_RETURN_COUNT
+        if count:
+            try:
+                count = min(int(next(iter(count))), MAX_RETURN_COUNT)
+            except ValueError:
+                count = fallback_count
+        else:
+            count = fallback_count
         obs_params = {
             "processing_level": processing_level,
             "property_filter": property_filter,
             "count": count,
         }
-        res = get_last_observations_influx(station_no, obs_params)
-        return json(res, status=200)
+        if not not_json:
+            try:
+                res = get_last_observations_influx(station_no, obs_params, True)
+                return json(res, status=200)
+            except Exception as e:
+                print(e)
+                raise e
+        headers = {'Content-Type': return_type}
+        jinja2 = get_jinja2_for_api(self.api)
+        if return_type == "text/csv":
+            if processing_level == 0:
+                template = "raw_data_csv.html"
+            else:
+                template = "level{}_data_csv.html".format(processing_level)
+            headers['Content-Disposition'] = "attachment; filename=\"station{}_level{}.csv\"" \
+                .format(str(station_no), str(processing_level))
+        elif return_type == "text/plain":
+            headers = {'Content-Type': return_type}
+            if processing_level == 0:
+                template = "raw_data_txt.html"
+            else:
+                template = "level{}_data_txt.html".format(processing_level)
+            headers['Content-Disposition'] = "attachment; filename=\"station{}_level{}.txt\"" \
+                .format(str(station_no), str(processing_level))
+        else:
+            raise RuntimeError("Invalid Return Type")
+
+        async def streaming_fn(response):
+            nonlocal template
+            nonlocal station_no
+            nonlocal obs_params
+            nonlocal request
+            res = get_last_observations_influx(station_no, obs_params, False)
+            if PY_36:
+                r = await jinja2.render_string_async(template, request, **res)
+            else:
+                r = jinja2.render_string(template, request, **res)
+            await response.write(r)
+
+        return stream(streaming_fn, status=200, headers=headers, content_type=return_type)
+

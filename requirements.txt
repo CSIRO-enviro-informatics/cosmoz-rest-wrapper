@@ -1,7 +1,7 @@
 sanic>=0.8.3
 sanic-plugins-framework
 sanic-cors
-sanic_restplus
+sanic_restplus>=0.4.1
 sanic-jinja2-spf
 sanic-oauthlib>=0.1.4
 sanic-session-spf

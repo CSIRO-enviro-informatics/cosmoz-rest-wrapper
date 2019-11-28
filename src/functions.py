@@ -302,7 +302,7 @@ if USE_MSSQL:
         }
         return resp
 
-def get_last_observations_influx(site_number, params):
+def get_last_observations_influx(site_number, params, json_safe=True):
     site_number = int(site_number)
     params = params or {}
     processing_level = params.get('processing_level', 3)
