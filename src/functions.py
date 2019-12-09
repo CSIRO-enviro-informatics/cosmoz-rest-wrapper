@@ -6,10 +6,6 @@ from influxdb import InfluxDBClient
 from pymongo import MongoClient
 import config
 from util import datetime_to_iso, datetime_from_iso, datetime_to_date_string
-USE_MSSQL = False
-if USE_MSSQL:
-    from pymssql import _mssql as mssql
-    from db import CosmozSQLConnection
 influx_client = InfluxDBClient(config.INFLUXDB_HOST, config.INFLUXDB_PORT, 'root', 'root', 'cosmoz', timeout=30)
 
 
@@ -136,7 +132,7 @@ def get_station_calibration_mongo(station_number, params, json_safe=True):
     for resp in rows:
         if "_id" in resp:
             del resp['id']
-        for r,v in resp.items():
+        for r, v in resp.items():
             if isinstance(v, datetime.datetime):
                 resp[r] = datetime_to_date_string(v)
             elif isinstance(v, bson.decimal128.Decimal128):
@@ -144,7 +140,6 @@ def get_station_calibration_mongo(station_number, params, json_safe=True):
                 if json_safe and g.is_nan():
                     g = "NaN"
                 resp[r] = g
-
 
         responses.append(resp)
     count = len(responses)
@@ -158,45 +153,6 @@ def get_station_calibration_mongo(station_number, params, json_safe=True):
     return resp
 
 
-
-if USE_MSSQL:
-    def get_station_sql(station_number, params):
-        station_number = int(station_number)
-        params = params or {}
-        username = params.get('username', None)
-        password = params.get('password', None)
-        property_filter = params.get('property_filter', [])
-        all_rows = None
-
-        if property_filter and len(property_filter) > 0:
-            if '*' in property_filter:
-                select_string = '*'
-            else:
-                try:
-                    select_cols = [station_variable_to_column_map[v] for v in property_filter]
-                    if "SiteNo" not in select_cols:
-                        select_cols.insert(0, "SiteNo")
-                    select_string = ",".join(select_cols)
-                except KeyError:
-                    raise RuntimeError("Cannot convert filter variable to column name.")
-        else:
-            select_string = '*'
-
-        with CosmozSQLConnection(username=username, password=password) as connection:
-            sql = 'SELECT {:s} FROM AllStations WHERE SiteNo=%d;'.format(select_string)
-            with connection.cursor(as_dict=True) as cursor:
-                try:
-                    cursor.execute(sql, station_number)
-                    all_rows = cursor.fetchall()
-                except mssql.MSSQLException as e:
-                    raise RuntimeError("Error executing SQL Query.\n{:s}\n".format(e.args[0]))
-        if all_rows is None or len(all_rows) < 1:
-            raise LookupError("Cannot find that site.")
-        row = next(iter(all_rows))
-        resp = { station_column_to_variable_map[c]: v for c,v in row.items() if c in station_column_to_variable_map.keys() }
-        if 'installation_date' in resp:
-            resp['installation_date'] = datetime_to_iso(resp['installation_date'])
-        return resp
 
 def get_stations_mongo(params):
     client = MongoClient(config.MONGODB_HOST, config.MONGODB_PORT)  # 27017
@@ -250,59 +206,7 @@ def get_stations_mongo(params):
     }
     return resp
 
-if USE_MSSQL:
-    def get_stations_sql(params):
-        params = params or {}
-        property_filter = params.get('property_filter', [])
-        count = params.get('count', 1000)
-        offset = params.get('offset', 0)
-        username = params.get('username', None)
-        password = params.get('password', None)
-        all_rows = None
-
-        if property_filter and len(property_filter) > 0:
-            if '*' in property_filter:
-                select_string = '*'
-            else:
-                try:
-                    select_cols = [station_variable_to_column_map[v] for v in property_filter]
-                    if "SiteNo" not in select_cols:
-                        select_cols.insert(0, "SiteNo")
-                    select_string = ",".join(select_cols)
-                except KeyError:
-                    raise RuntimeError("Cannot convert filter variable to column name.")
-        else:
-            select_string = '*'
-
-        with CosmozSQLConnection(username=username, password=password) as connection:
-            sql = 'SELECT {:s} FROM AllStations ORDER BY [SiteNo] OFFSET {:d} ROWS ' \
-                  'FETCH NEXT {:d} ROWS ONLY;'.format(select_string, offset, count)
-            with connection.cursor(as_dict=True) as cursor:
-                try:
-                    cursor.execute(sql)
-                    all_rows = cursor.fetchall()
-                except mssql.MSSQLException as e:
-                    raise RuntimeError("Error executing SQL Query.\n{:s}\n".format(e.args[0]))
-        if all_rows is None or len(all_rows) < 1:
-            raise LookupError("Cannot find any sites.")
-        count = len(all_rows)
-        stations = []
-        for _row in all_rows:
-            station = { station_column_to_variable_map[c]: v
-                        for c,v in _row.items() if c in station_column_to_variable_map.keys() }
-            if 'installation_date' in station:
-                station['installation_date'] = datetime_to_iso(station['installation_date'])
-            stations.append(station)
-        resp = {
-            'meta': {
-            'count': count,
-            'offset': offset,
-            },
-            'stations': stations,
-        }
-        return resp
-
-def get_last_observations_influx(site_number, params, json_safe=True):
+def get_last_observations_influx(site_number, params, json_safe=True, excel_safe=False):
     site_number = int(site_number)
     params = params or {}
     processing_level = params.get('processing_level', 3)
@@ -335,6 +239,10 @@ def get_last_observations_influx(site_number, params, json_safe=True):
     observations = []
     for _row in points:
         observation = _row
+        if 'time' in observation and excel_safe:
+            # hack to very quickly convert iso 8601 to yyyy-MM-dd hh:mm:ss for excel
+            dt = observation['time'].replace('T', ' ')[:19]
+            observation['time'] = dt
         #observation = {obsv_column_to_variable_map[c]: v
         #               for c, v in _row.items() if c in obsv_column_to_variable_map.keys()}
         #if 'time' in observation:
@@ -353,7 +261,7 @@ def get_last_observations_influx(site_number, params, json_safe=True):
     }
     return resp
 
-def get_observations_influx(site_number, params, json_safe=True):
+def get_observations_influx(site_number, params, json_safe=True, excel_safe=False):
     site_number = int(site_number)
     params = params or {}
     processing_level = params.get('processing_level', 3)
@@ -428,6 +336,10 @@ def get_observations_influx(site_number, params, json_safe=True):
     observations = []
     for _row in points:
         observation = _row
+        if 'time' in observation and excel_safe:
+            # hack to very quickly convert iso 8601 to yyyy-MM-dd hh:mm:ss for excel
+            dt = observation['time'].replace('T', ' ')[:19]
+            observation['time'] = dt
         #observation = {obsv_column_to_variable_map[c]: v
         #               for c, v in _row.items() if c in obsv_column_to_variable_map.keys()}
         #if 'time' in observation:
@@ -449,89 +361,4 @@ def get_observations_influx(site_number, params, json_safe=True):
         resp['meta']['aggregation'] = str(aggregate)
     return resp
 
-if USE_MSSQL:
-    def get_observations_sql(site_number, params):
-        site_number = int(site_number)
-        params = params or {}
-        processing_level = params.get('processing_level', 3)
-        property_filter = params.get('property_filter', [])
-        count = params.get('count', 1000)
-        offset = params.get('offset', 0)
-        username = params.get('username', None)
-        password = params.get('password', None)
-        startdate = params.get('startdate', None)
-        enddate = params.get('enddate', None)
-        if startdate is not None and isinstance(startdate, str):
-            startdate = datetime_from_iso(startdate)
-        if enddate is not None and isinstance(enddate, str):
-            enddate = datetime_from_iso(enddate)
-
-        db_table = "Level{:d}_Table".format(processing_level)
-        assert 2 <= processing_level <= 4, "Only levels 2, 3 and 4 are used for now."
-        all_rows = None
-        if startdate is None:
-            since_query = ""
-        else:
-            if isinstance(startdate, datetime.datetime):
-                start_datetime_string = startdate.strftime("%Y%m%d %H:%M:%S")
-            elif isinstance(startdate, str):
-                start_datetime_string = startdate
-            else:
-                raise RuntimeError()
-            since_query = " AND Timestamp >= '{:s}' ".format(start_datetime_string)
-
-        if enddate is None:
-            before_query = ""
-        else:
-            if isinstance(enddate, datetime.datetime):
-                end_datetime_string = enddate.strftime("%Y%m%d %H:%M:%S")
-            elif isinstance(enddate, str):
-                end_datetime_string = enddate
-            else:
-                raise RuntimeError()
-            before_query = " AND Timestamp <= '{:s}' ".format(end_datetime_string)
-
-        if property_filter and len(property_filter) > 0:
-            if '*' in property_filter:
-                select_string = '*'
-            else:
-                try:
-                    select_cols = [obsv_variable_to_column_map[v] for v in property_filter]
-                    if "Timestamp" not in select_cols:
-                        select_cols.insert(0, "Timestamp")
-                    select_string = ",".join(select_cols)
-                except KeyError:
-                    raise RuntimeError("Cannot convert filter variable to column name.")
-        else:
-            select_string = '*'
-
-        with CosmozSQLConnection(username=username, password=password) as connection:
-            sql = 'SELECT {:s} FROM {:s} WHERE SiteNo=%d{:s}{:s}ORDER BY [Timestamp] OFFSET {:d} ROWS ' \
-                  'FETCH NEXT {:d} ROWS ONLY;'.format(select_string, db_table, since_query, before_query, offset, count)
-            with connection.cursor(as_dict=True) as cursor:
-                try:
-                    cursor.execute(sql, site_number)
-                    all_rows = cursor.fetchall()
-                except mssql.MSSQLException as e:
-                    raise RuntimeError("Error executing SQL Query.\n{:s}\n".format(e.args[0]))
-        count = len(all_rows)
-        observations = []
-        for _row in all_rows:
-            observation = {obsv_column_to_variable_map[c]: v
-                           for c, v in _row.items() if c in obsv_column_to_variable_map.keys()}
-            if 'timestamp' in observation:
-                observation['timestamp'] = datetime_to_iso(observation['timestamp'])
-            observations.append(observation)
-        resp = {
-            'meta': {
-            'site_no': site_number,
-            'processing_level': processing_level,
-            'count': count,
-            'offset': offset,
-            'start_date': datetime_to_iso(startdate) if startdate else '',
-            'end_date': datetime_to_iso(enddate) if enddate else '',
-            },
-            'observations': observations,
-        }
-        return resp
 

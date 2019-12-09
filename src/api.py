@@ -286,10 +286,10 @@ class StationCalibration(Resource):
         obs_params = {
             "property_filter": property_filter,
         }
-        json_safe = return_type == "application/json"
-        res = get_station_calibration_mongo(station_no, obs_params, json_safe)
         if return_type == "application/json":
+            res = get_station_calibration_mongo(station_no, obs_params, True)
             return json(res, status=200)
+        res = get_station_calibration_mongo(station_no, obs_params, False)
         headers = {'Content-Type': return_type}
         jinja2 = get_jinja2_for_api(self.api)
         if return_type == "text/csv":
@@ -370,6 +370,8 @@ class Observations(Resource):
         ("aggregate", {"description": "Average observations over a given time period.\n\n"
                                       "Eg. `2h` or `3m` or `1d`",
                        "required": False, "type": "string", "format": "text"}),
+        ("excel_compat", {"description": "Use MS Excel compatible datetime column in CSV and TXT responses.",
+                          "required": False, "type": "boolean", "default": False}),
         ("count", {"description": "Number of records to return.",
                    "required": False, "type": "number", "format": "integer", "default": 2000}),
         ("offset", {"description": "Skip number of records before reading count.",
@@ -405,6 +407,7 @@ class Observations(Resource):
                 property_filter = [p for p in property_filter if len(p)]
         else:
             property_filter = "*"
+        excel_compat = bool(request.args.getlist('excel_compat', [False])[0])
         aggregate = request.args.getlist('aggregate', None)
         if aggregate:
             aggregate = str(next(iter(aggregate)))
@@ -455,7 +458,7 @@ class Observations(Resource):
         }
         if not not_json:
             try:
-                res = get_observations_influx(station_no, obs_params, True)
+                res = get_observations_influx(station_no, obs_params, True, False)
                 return json(res, status=200)
             except Exception as e:
                 print(e)
@@ -485,7 +488,8 @@ class Observations(Resource):
             nonlocal station_no
             nonlocal obs_params
             nonlocal request
-            res = get_observations_influx(station_no, obs_params, False)
+            nonlocal excel_compat
+            res = get_observations_influx(station_no, obs_params, False, excel_compat)
             if PY_36:
                 r = await jinja2.render_string_async(template, request, **res)
             else:
@@ -507,6 +511,8 @@ class LastObservations(Resource):
         ("property_filter", {"description": "Comma delimited list of properties to retrieve.\n\n"
                              "_Enter * for all_.",
                              "required": False, "type": "string", "format": "text"}),
+        ("excel_compat", {"description": "Use MS Excel compatible datetime column in CSV and TXT responses.",
+                          "required": False, "type": "boolean", "default": False}),
         ("count", {"description": "Number of records to return.",
                    "required": False, "type": "number", "format": "integer", "default": 1}),
     ]))
@@ -532,7 +538,7 @@ class LastObservations(Resource):
             processing_level = int(next(iter(processing_level)))
         else:
             processing_level = 4
-
+        excel_compat = bool(request.args.getlist('excel_compat', [False])[0])
         not_json = return_type != "application/json"
         if not not_json:
             property_filter = request.args.getlist('property_filter', None)
@@ -560,7 +566,7 @@ class LastObservations(Resource):
         }
         if not not_json:
             try:
-                res = get_last_observations_influx(station_no, obs_params, True)
+                res = get_last_observations_influx(station_no, obs_params, True, False)
                 return json(res, status=200)
             except Exception as e:
                 print(e)
@@ -590,7 +596,8 @@ class LastObservations(Resource):
             nonlocal station_no
             nonlocal obs_params
             nonlocal request
-            res = get_last_observations_influx(station_no, obs_params, False)
+            nonlocal excel_compat
+            res = get_last_observations_influx(station_no, obs_params, False, excel_compat)
             if PY_36:
                 r = await jinja2.render_string_async(template, request, **res)
             else:
