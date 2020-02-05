@@ -1,5 +1,5 @@
 [build-system]
-requires = ["poetry>=1.0.0b8"]
+requires = ["poetry>=1.0.1"]
 build-backend = "poetry.masonry.api"
 
 [tool.poetry]
@@ -13,10 +13,10 @@ readme = "README.rst"
 [tool.poetry.dependencies]
 python = "^3.6"
 # These packages are mandatory and form the core of this package’s distribution.
-sanic = "~19.3.1"
-sanic-plugins-framework = "^0.8.2"
+sanic = "~19.6.3"
+sanic-plugins-framework = "~0.8.2.post1"
 sanic-cors = "^0.9.9"
-sanic-restplus = "^0.4.1"
+sanic-restplus = "~0.4.1.post1"
 sanic-jinja2-spf = "*"
 sanic-oauthlib = "^0.1.4"
 sanic-session-spf = "*"
@@ -24,4 +24,3 @@ python-dotenv = "^0.10.0"
 influxdb = "^5.2"
 pymongo = "^3.7"
 cachetools = "^3.0"
-

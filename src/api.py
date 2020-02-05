@@ -61,6 +61,7 @@ def get_jinja2_for_api(_a):
     assoc = sanic_jinja2.AssociatedTuple(sanic_jinja2, reg)
     return assoc
 
+
 def get_accept_mediatypes_in_order(request):
     """
     Reads an Accept HTTP header and returns an array of Media Type string in descending weighted order
@@ -70,42 +71,34 @@ def get_accept_mediatypes_in_order(request):
     """
     try:
         # split the header into individual URIs, with weights still attached
-        profiles = request.headers['Accept'].split(',')
+        mtypes_list = request.headers['Accept'].split(',')
         # remove \s
-        profiles = [x.replace(' ', '').strip() for x in profiles]
+        mtypes_list = [x.replace(' ', '').strip() for x in mtypes_list]
 
         # split off any weights and sort by them with default weight = 1
-        profiles = [(float(x.split(';')[1].replace('q=', '')) if ";q=" in x else 1, x.split(';')[0]) for x in profiles]
+        weighted_mtypes = []
+        for mtype in mtypes_list:
+            mtype_parts = iter(mtype.split(";"))
+            mimetype = next(mtype_parts)
+            qweight = None
+            try:
+                while True:
+                    part = next(mtype_parts)
+                    if part.startswith("q="):
+                        qweight = float(part.replace("q=", ""))
+                        break
+            except StopIteration:
+                if qweight is None:
+                    qweight = 1.0
+            weighted_mtypes.append((qweight, mimetype))
 
         # sort profiles by weight, heaviest first
-        profiles.sort(reverse=True)
+        weighted_mtypes.sort(reverse=True)
 
-        return [x[1] for x in profiles]
+        return [x[1] for x in weighted_mtypes]
     except Exception as e:
-        raise RuntimeError('You have requested a Media Type using an Accept header that is incorrectly formatted.')
-
-def get_accept_profiles_in_order(request):
-    """
-    Reads an Accept-Profile HTTP header and returns an array of Profile URIs in descending weighted order
-
-    :return: List of URIs of accept profiles in descending request order
-    :rtype: list
-    """
-    try:
-        # split the header into individual URIs, with weights still attached
-        profiles = request.headers['Accept-Profile'].split(',')
-        # remove <, >, and \s
-        profiles = [x.replace('<', '').replace('>', '').replace(' ', '').strip() for x in profiles]
-
-        # split off any weights and sort by them with default weight = 1
-        profiles = [(float(x.split(';')[1].replace('q=', '')) if ";q=" in x else 1, x.split(';')[0]) for x in profiles]
-
-        # sort profiles by weight, heaviest first
-        profiles.sort(reverse=True)
-
-        return [x[1] for x in profiles]
-    except Exception as e:
-        raise RuntimeError('You have requested a profile using an Accept-Profile header that is incorrectly formatted.')
+        raise RuntimeError(
+            'You have requested a Media Type using an Accept header that is incorrectly formatted.')
 
 def match_accept_mediatypes_to_provides(request, provides):
     order = get_accept_mediatypes_in_order(request)

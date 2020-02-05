@@ -29,7 +29,8 @@ from sanic_restplus import restplus
 from sanic_jinja2_spf import sanic_jinja2
 
 HERE_DIR = os.path.dirname(__file__)
-sys.path.append(os.path.dirname(HERE_DIR))
+if HERE_DIR not in sys.path:
+    sys.path.append(os.path.dirname(HERE_DIR))
 from api import api
 from apikey import check_apikey_valid, test_apikey, create_apikey_from_access_token
 from util import PY_36, load_env
