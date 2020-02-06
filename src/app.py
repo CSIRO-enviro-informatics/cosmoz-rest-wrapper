@@ -27,6 +27,7 @@ from spf.plugins.contextualize import contextualize
 from sanic_cors.extension import cors
 from sanic_restplus import restplus
 from sanic_jinja2_spf import sanic_jinja2
+from jinja2 import FileSystemLoader
 
 HERE_DIR = os.path.dirname(__file__)
 if HERE_DIR not in sys.path:
@@ -37,8 +38,6 @@ from util import PY_36, load_env
 import oauth1_client
 
 load_env()
-#from src.functions import JSONEncoder_newdefault
-#JSONEncoder_newdefault()
 OVERRIDE_SERVER_NAME = getenv("SANIC_OVERRIDE_SERVER_NAME", "localhost:9001")
 print("Using OVERRIDE_SERVER_NAME: {}".format(OVERRIDE_SERVER_NAME))
 PROXY_ROUTE_BASE = getenv("SANIC_PROXY_ROUTE_BASE", "")
@@ -47,19 +46,20 @@ SANIC_SERVER_NAME = getenv("SANIC_SERVER_NAME", "")
 app = Sanic(__name__)
 app.config.SWAGGER_UI_DOC_EXPANSION = "full"
 if len(OVERRIDE_SERVER_NAME) and len(SANIC_SERVER_NAME) < 1:
-   OR_SERVER_NAME_PARTS = OVERRIDE_SERVER_NAME.split(":")
-   SANIC_SERVER_NAME = OR_SERVER_NAME_PARTS[0]
-   if len(OR_SERVER_NAME_PARTS) > 1:
-       port = int(OR_SERVER_NAME_PARTS[1])
-       if port != 80 and port != 443:
-           SANIC_SERVER_NAME = "{}:{}".format(SANIC_SERVER_NAME, str(port))
+    OR_SERVER_NAME_PARTS = OVERRIDE_SERVER_NAME.split(":")
+    SANIC_SERVER_NAME = OR_SERVER_NAME_PARTS[0]
+    if len(OR_SERVER_NAME_PARTS) > 1:
+        port = int(OR_SERVER_NAME_PARTS[1])
+        if port != 80 and port != 443:
+            SANIC_SERVER_NAME = "{}:{}".format(SANIC_SERVER_NAME, str(port))
 print("Using SANIC_SERVER_NAME: {}".format(SANIC_SERVER_NAME))
 if len(SANIC_SERVER_NAME):
     app.config['SERVER_NAME'] = SANIC_SERVER_NAME
 spf = SanicPluginsFramework(app)
 cors, cors_reg = spf.register_plugin(cors, origins='*')
 ctx = spf.register_plugin(contextualize)
-sanic_jinja2, jinja2_reg = spf.register_plugin(sanic_jinja2, enable_async=PY_36)
+template_loader = FileSystemLoader(os.path.join(HERE_DIR, "templates"))
+sanic_jinja2, jinja2_reg = spf.register_plugin(sanic_jinja2, loader=template_loader, enable_async=PY_36)
 restplus, restplus_reg = spf.register_plugin(restplus)
 c = oauth1_client.create_client(app)
 file_loc = os.path.abspath(os.path.join(HERE_DIR, "static/material_swagger.css"))
