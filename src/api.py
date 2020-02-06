@@ -223,7 +223,7 @@ class Station(Resource):
             headers = {'Content-Type': return_type}
             jinja2 = get_jinja2_for_api(self.api)
             if PY_36:
-                return jinja2.render_async('site_values_txt.html', request, headers=headers, **res)
+                return await jinja2.render_async('site_values_txt.html', request, headers=headers, **res)
             else:
                 return jinja2.render('site_values_txt.html', request, headers=headers, **res)
 
