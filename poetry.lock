@@ -136,7 +136,7 @@ description = "A collection of framework independent HTTP protocol utils."
 name = "httptools"
 optional = false
 python-versions = "*"
-version = "0.0.13"
+version = "0.1.0"
 
 [[package]]
 category = "main"
@@ -699,7 +699,16 @@ httpcore = [
     {file = "httpcore-0.3.0.tar.gz", hash = "sha256:96f910b528d47b683242ec207050c7bbaa99cd1b9a07f78ea80cf61e55556b58"},
 ]
 httptools = [
-    {file = "httptools-0.0.13.tar.gz", hash = "sha256:e00cbd7ba01ff748e494248183abc6e153f49181169d8a3d41bb49132ca01dfc"},
+    {file = "httptools-0.1.0-cp36-cp36m-macosx_10_13_x86_64.whl", hash = "sha256:8bf3bbf76c97da8a4983051577d65db7eb86f2d1a38dca5cdcba5d2efb2a39f4"},
+    {file = "httptools-0.1.0-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:c6d5eadcdc1c6541bdf10a7dd4fa8949a1e46e99fa292b44159f0990ce7977ce"},
+    {file = "httptools-0.1.0-cp36-cp36m-win_amd64.whl", hash = "sha256:b89a46936bac45b2352818161819b10ed56cb8bb756addca162a3baf7606da64"},
+    {file = "httptools-0.1.0-cp37-cp37m-macosx_10_13_x86_64.whl", hash = "sha256:31f6a76aa797a64447a36abc4b92fdeb6afe1726fe1b2516d50eedbcf98b1739"},
+    {file = "httptools-0.1.0-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:86e777dbca5b82b23aa6939b98c80466bb9214790d927e870c26dffe8bf14ad0"},
+    {file = "httptools-0.1.0-cp37-cp37m-win_amd64.whl", hash = "sha256:ee10c3f4e6c2b252c9a5f2d550fb8aaf364551444527049856ac8c195092e75c"},
+    {file = "httptools-0.1.0-cp38-cp38-macosx_10_13_x86_64.whl", hash = "sha256:d3a0f0c5ca38a6e5de11f114407dc143bdfcd13895fa35c57f0cca2b68606207"},
+    {file = "httptools-0.1.0-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:46c964b75908568f0da46aa17eb11bf2bd00f9571bc392e38d5eba34daabd627"},
+    {file = "httptools-0.1.0-cp38-cp38-win_amd64.whl", hash = "sha256:b7ff7aa5c74c4732957c0722989a8c85c3102b01c4e5e37db64dc9923b485d70"},
+    {file = "httptools-0.1.0.tar.gz", hash = "sha256:0680acab83b0699b770380b88a30e6da9a67aae56cece8559b5f7c6f26268f86"},
 ]
 hyperframe = [
     {file = "hyperframe-5.2.0-py2.py3-none-any.whl", hash = "sha256:5187962cb16dcc078f23cb5a4b110098d546c3f41ff2d4038a9896893bbd0b40"},
@@ -859,6 +868,7 @@ python-dateutil = [
 ]
 python-dotenv = [
     {file = "python-dotenv-0.10.5.tar.gz", hash = "sha256:f254bfd0c970d64ccbb6c9ebef3667ab301a71473569c991253a481f1c98dddc"},
+    {file = "python_dotenv-0.10.5-py2.py3-none-any.whl", hash = "sha256:440c7c23d53b7d352f9c94d6f70860242c2f071cf5c029dd661ccb22d64ae42b"},
 ]
 pytz = [
     {file = "pytz-2019.3-py2.py3-none-any.whl", hash = "sha256:1c557d7d0e871de1f5ccd5833f60fb2550652da6be2693c1e02300743d21500d"},
