@@ -22,10 +22,11 @@ from sanic_restplus import Api, Resource, fields
 from sanic.response import json, text, stream, HTTPResponse
 from sanic.exceptions import ServiceUnavailable
 from sanic_jinja2_spf import sanic_jinja2
-from orjson import dumps as fast_dumps
+from orjson import dumps as fast_dumps, OPT_NAIVE_UTC, OPT_UTC_Z
 from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
 from util import PY_36
 
+orjson_option = OPT_NAIVE_UTC | OPT_UTC_Z
 
 url_prefix = 'rest'
 
@@ -158,7 +159,7 @@ class Stations(Resource):
             "offset": offset,
         }
         res = await get_stations_mongo(obs_params, json_safe='orjson')
-        return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res))
+        return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
 
     @ns.doc('post_station', params=OrderedDict([
         ("name", {"description": "Station Name",
@@ -215,7 +216,7 @@ class Station(Resource):
         json_safe = 'orjson' if return_type == "application/json" else False
         res = await get_station_mongo(station_no, obs_params, json_safe=json_safe)
         if return_type == "application/json":
-            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res))
+            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
         elif return_type == "applcation/csv":
             raise NotImplementedError()
             #return build_csv(res)
@@ -282,7 +283,7 @@ class StationCalibration(Resource):
         json_safe = 'orjson' if return_type == "application/json" else False
         res = await get_station_calibration_mongo(station_no, obs_params, json_safe)
         if return_type == "application/json":
-            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res))
+            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
         headers = {'Content-Type': return_type}
         jinja2 = get_jinja2_for_api(self.api)
         if return_type == "text/csv":
@@ -453,7 +454,7 @@ class Observations(Resource):
             json_safe = 'orjson'
             try:
                 res = get_observations_influx(station_no, obs_params, json_safe, False)
-                return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res))
+                return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
             except Exception as e:
                 print(e)
                 raise e
@@ -562,7 +563,7 @@ class LastObservations(Resource):
             json_safe = 'orjson'
             try:
                 res = get_last_observations_influx(station_no, obs_params, json_safe, False)
-                return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res))
+                return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
             except Exception as e:
                 print(e)
                 raise e

@@ -5,8 +5,6 @@ from collections import OrderedDict
 import bson
 from influxdb import InfluxDBClient
 from motor.motor_asyncio import AsyncIOMotorClient as MotorClient
-
-from pymongo import MongoClient
 import config
 from util import datetime_to_iso, datetime_from_iso, datetime_to_date_string
 
@@ -115,8 +113,6 @@ async def get_station_mongo(station_number, params, json_safe=True):
     #     resp['installation_date'] = datetime_to_iso(resp['installation_date'])
     for r,v in resp.items():
         if isinstance(v, datetime.datetime):
-            if v.tzinfo is None:
-                v = v.replace(tzinfo=datetime.timezone.utc)
             if json_safe and json_safe != "orjson":  # orjson can handle native datetimes
                 v = datetime_to_iso(v)
             resp[r] = v
@@ -167,8 +163,6 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True):
                 del resp['id']
             for r, v in resp.items():
                 if isinstance(v, datetime.datetime):
-                    if v.tzinfo is None:
-                        v = v.replace(tzinfo=datetime.timezone.utc)
                     if json_safe and json_safe != "orjson":  # orjson can handle native datetimes
                         v = datetime_to_iso(v)
                     resp[r] = v
@@ -229,8 +223,6 @@ async def get_stations_mongo(params, json_safe=True):
             #            for c,v in _row.items() if c in station_column_to_variable_map.keys() }
             for r, v in station.items():
                 if isinstance(v, datetime.datetime):
-                    if v.tzinfo is None:
-                        v = v.replace(tzinfo=datetime.timezone.utc)
                     if json_safe and json_safe != "orjson": #orjson can handle native datetimes
                         v = datetime_to_iso(v)
                     station[r] = v
