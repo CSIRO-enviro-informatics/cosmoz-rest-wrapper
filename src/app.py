@@ -27,40 +27,44 @@ from spf.plugins.contextualize import contextualize
 from sanic_cors.extension import cors
 from sanic_restplus import restplus
 from sanic_jinja2_spf import sanic_jinja2
+from sanic_metrics import sanic_metrics
 from jinja2 import FileSystemLoader
+import config
 
 HERE_DIR = os.path.dirname(__file__)
 if HERE_DIR not in sys.path:
     sys.path.append(os.path.dirname(HERE_DIR))
 from api import api
 from apikey import check_apikey_valid, test_apikey, create_apikey_from_access_token
-from util import PY_36, load_env
+from util import PY_36
 import oauth1_client
 
-load_env()
-OVERRIDE_SERVER_NAME = getenv("SANIC_OVERRIDE_SERVER_NAME", "localhost:9001")
-print("Using OVERRIDE_SERVER_NAME: {}".format(OVERRIDE_SERVER_NAME))
-PROXY_ROUTE_BASE = getenv("SANIC_PROXY_ROUTE_BASE", "")
-print("Using SANIC_PROXY_ROUTE_BASE: {}".format(PROXY_ROUTE_BASE))
-SANIC_SERVER_NAME = getenv("SANIC_SERVER_NAME", "")
+print("Using OVERRIDE_SERVER_NAME: {}".format(config.OVERRIDE_SERVER_NAME))
+print("Using SANIC_PROXY_ROUTE_BASE: {}".format(config.PROXY_ROUTE_BASE))
 app = Sanic(__name__)
 app.config.SWAGGER_UI_DOC_EXPANSION = "full"
-if len(OVERRIDE_SERVER_NAME) and len(SANIC_SERVER_NAME) < 1:
-    OR_SERVER_NAME_PARTS = OVERRIDE_SERVER_NAME.split(":")
-    SANIC_SERVER_NAME = OR_SERVER_NAME_PARTS[0]
-    if len(OR_SERVER_NAME_PARTS) > 1:
-        port = int(OR_SERVER_NAME_PARTS[1])
-        if port != 80 and port != 443:
-            SANIC_SERVER_NAME = "{}:{}".format(SANIC_SERVER_NAME, str(port))
+SANIC_SERVER_NAME = config.SANIC_SERVER_NAME
+OVERRIDE_SERVER_NAME = config.OVERRIDE_SERVER_NAME
+PROXY_ROUTE_BASE = config.PROXY_ROUTE_BASE
+if len(OVERRIDE_SERVER_NAME) and len(config.SANIC_SERVER_NAME) < 1:
+   OR_SERVER_NAME_PARTS = config.OVERRIDE_SERVER_NAME.split(":")
+   SANIC_SERVER_NAME = OR_SERVER_NAME_PARTS[0]
+   if len(OR_SERVER_NAME_PARTS) > 1:
+       port = int(OR_SERVER_NAME_PARTS[1])
+       if port != 80 and port != 443:
+           SANIC_SERVER_NAME = "{}:{}".format(SANIC_SERVER_NAME, str(port))
 print("Using SANIC_SERVER_NAME: {}".format(SANIC_SERVER_NAME))
 if len(SANIC_SERVER_NAME):
     app.config['SERVER_NAME'] = SANIC_SERVER_NAME
 spf = SanicPluginsFramework(app)
 cors, cors_reg = spf.register_plugin(cors, origins='*')
 ctx = spf.register_plugin(contextualize)
-template_loader = FileSystemLoader(os.path.join(HERE_DIR, "templates"))
-sanic_jinja2, jinja2_reg = spf.register_plugin(sanic_jinja2, loader=template_loader, enable_async=PY_36)
+templates_dir = os.path.abspath(os.path.join(HERE_DIR, "templates"))
+jinja2_loader = FileSystemLoader(templates_dir)
+sanic_jinja2, jinja2_reg = spf.register_plugin(sanic_jinja2, enable_async=PY_36, loader=jinja2_loader)
 restplus, restplus_reg = spf.register_plugin(restplus)
+metrics_filename = os.path.join(config.METRICS_DIRECTORY, "access_{date:s}.txt")
+metrics = spf.register_plugin(sanic_metrics, opt={'type': 'out'}, log={'format': 'vcombined', 'filename': metrics_filename})
 c = oauth1_client.create_client(app)
 file_loc = os.path.abspath(os.path.join(HERE_DIR, "static/material_swagger.css"))
 app.static(uri="/static/material_swagger.css", file_or_directory=file_loc,
@@ -140,4 +144,4 @@ if __name__ == "__main__":
     else:
         host = server_name
         port = 9001
-    app.run(host=host, port=port, debug=True, auto_reload=False)
+    app.run(host=host, port=port, debug=config.DEBUG, auto_reload=False)

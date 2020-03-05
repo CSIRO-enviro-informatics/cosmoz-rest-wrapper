@@ -19,10 +19,10 @@ from collections import OrderedDict
 import datetime
 from datetime import datetime, timezone, timedelta
 from sanic_restplus import Api, Resource, fields
-from sanic.response import json, text, stream
+from sanic.response import json, text, stream, HTTPResponse
 from sanic.exceptions import ServiceUnavailable
 from sanic_jinja2_spf import sanic_jinja2
-
+from orjson import dumps as fast_dumps
 from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
 from util import PY_36
 
@@ -51,7 +51,8 @@ api = Api(title="CSIRO Cosmoz REST Interface",
 ns = api.default_namespace
 
 MAX_RETURN_COUNT = 2147483647  # Highest 32bit signed int
-EARLIEST_DATETIME = datetime.min.replace(year=1900, tzinfo=timezone.utc)
+EARLIEST_DATETIME = datetime.now(tz=timezone.utc) - timedelta(days=36525)
+
 
 def get_jinja2_for_api(_a):
     if _a.spf_reg is None:
@@ -134,7 +135,7 @@ class Stations(Resource):
         ("offset", {"description": "Skip number of records before reading count.",
                     "required": False, "type": "number", "format": "integer", "default": 0}),
     ]), security=None)
-
+    @ns.produces(["application/json"])
     async def get(self, request, *args, **kwargs):
         '''Get cosmoz stations.'''
         property_filter = request.args.getlist('property_filter', None)
@@ -156,8 +157,8 @@ class Stations(Resource):
             "count": count,
             "offset": offset,
         }
-        res = get_stations_mongo(obs_params)
-        return json(res, status=200)
+        res = await get_stations_mongo(obs_params, json_safe='orjson')
+        return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res))
 
     @ns.doc('post_station', params=OrderedDict([
         ("name", {"description": "Station Name",
@@ -167,7 +168,6 @@ class Stations(Resource):
         ("longitude", {"description": "Longitude (in decimal degrees)",
                       "required": True, "type": "string", "format": "number"}),
     ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
-    @ns.produces(["application/json"])
     async def post(self, request, *args, **kwargs):
         '''Add new cosmoz station.'''
         #Generates station number
@@ -212,10 +212,10 @@ class Station(Resource):
         obs_params = {
             "property_filter": property_filter,
         }
-        json_safe = return_type == "application/json"
-        res = get_station_mongo(station_no, obs_params, json_safe=json_safe)
+        json_safe = 'orjson' if return_type == "application/json" else False
+        res = await get_station_mongo(station_no, obs_params, json_safe=json_safe)
         if return_type == "application/json":
-            return json(res, status=200)
+            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res))
         elif return_type == "applcation/csv":
             raise NotImplementedError()
             #return build_csv(res)
@@ -279,10 +279,10 @@ class StationCalibration(Resource):
         obs_params = {
             "property_filter": property_filter,
         }
+        json_safe = 'orjson' if return_type == "application/json" else False
+        res = await get_station_calibration_mongo(station_no, obs_params, json_safe)
         if return_type == "application/json":
-            res = get_station_calibration_mongo(station_no, obs_params, True)
-            return json(res, status=200)
-        res = get_station_calibration_mongo(station_no, obs_params, False)
+            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res))
         headers = {'Content-Type': return_type}
         jinja2 = get_jinja2_for_api(self.api)
         if return_type == "text/csv":
@@ -450,9 +450,10 @@ class Observations(Resource):
             "offset": offset,
         }
         if not not_json:
+            json_safe = 'orjson'
             try:
-                res = get_observations_influx(station_no, obs_params, True, False)
-                return json(res, status=200)
+                res = get_observations_influx(station_no, obs_params, json_safe, False)
+                return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res))
             except Exception as e:
                 print(e)
                 raise e
@@ -558,9 +559,10 @@ class LastObservations(Resource):
             "count": count,
         }
         if not not_json:
+            json_safe = 'orjson'
             try:
-                res = get_last_observations_influx(station_no, obs_params, True, False)
-                return json(res, status=200)
+                res = get_last_observations_influx(station_no, obs_params, json_safe, False)
+                return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res))
             except Exception as e:
                 print(e)
                 raise e

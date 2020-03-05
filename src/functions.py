@@ -1,13 +1,33 @@
+import asyncio
 import datetime
 from collections import OrderedDict
 
 import bson
 from influxdb import InfluxDBClient
+from motor.motor_asyncio import AsyncIOMotorClient as MotorClient
+
 from pymongo import MongoClient
 import config
 from util import datetime_to_iso, datetime_from_iso, datetime_to_date_string
-influx_client = InfluxDBClient(config.INFLUXDB_HOST, config.INFLUXDB_PORT, 'root', 'root', 'cosmoz', timeout=30)
 
+persistent_clients = {
+    'influx_client': None,
+    'mongo_client': None
+}
+
+def get_mongo_client():
+    if persistent_clients['mongo_client'] is None:
+        persistent_clients['mongo_client'] = MotorClient(
+            config.MONGODB_HOST, config.MONGODB_PORT,
+            io_loop=asyncio.get_event_loop())
+    return persistent_clients['mongo_client']
+
+def get_influx_client():
+    if persistent_clients['influx_client'] is None:
+        persistent_clients['influx_client'] = InfluxDBClient(
+            config.INFLUXDB_HOST, config.INFLUXDB_PORT, 'root', 'root',
+            'cosmoz', timeout=30)
+    return persistent_clients['influx_client']
 
 obsv_variable_to_column_map = {
     'timestamp': 'Timestamp',
@@ -59,8 +79,8 @@ station_variable_to_column_map = {
 
 station_column_to_variable_map = { v: k for k,v in station_variable_to_column_map.items() }
 
-def get_station_mongo(station_number, params, json_safe=True):
-    client = MongoClient(config.MONGODB_HOST, config.MONGODB_PORT)  # 27017
+async def get_station_mongo(station_number, params, json_safe=True):
+    mongo_client = get_mongo_client()
     station_number = int(station_number)
     params = params or {}
     property_filter = params.get('property_filter', [])
@@ -77,9 +97,13 @@ def get_station_mongo(station_number, params, json_safe=True):
             select_filter.move_to_end('_id', last=False)
     else:
         select_filter = None
-    db = client.cosmoz
+    db = mongo_client.cosmoz
     all_stations_collection = db.all_stations
-    row = all_stations_collection.find_one({'site_no': station_number}, projection=select_filter)
+    s = await mongo_client.start_session()
+    try:
+        row = await all_stations_collection.find_one({'site_no': station_number}, projection=select_filter, session=s)
+    finally:
+        await s.end_session()
     if row is None or len(row) < 1:
         raise LookupError("Cannot find site.")
     resp = row
@@ -87,20 +111,26 @@ def get_station_mongo(station_number, params, json_safe=True):
     if select_filter is None or select_filter.get('_id', False) is False:
         if '_id' in resp:
             del resp['_id']
-    if 'installation_date' in resp:
-        resp['installation_date'] = datetime_to_iso(resp['installation_date'])
+    # if 'installation_date' in resp:
+    #     resp['installation_date'] = datetime_to_iso(resp['installation_date'])
     for r,v in resp.items():
         if isinstance(v, datetime.datetime):
-            resp[r] = datetime_to_iso(v)
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=datetime.timezone.utc)
+            if json_safe and json_safe != "orjson":  # orjson can handle native datetimes
+                v = datetime_to_iso(v)
+            resp[r] = v
         elif isinstance(v, bson.decimal128.Decimal128):
             g = v.to_decimal()
             if json_safe and g.is_nan():
-                g = "NaN"
+                g = 'NaN'
+            elif json_safe == "orjson":  # orjson can't do decimal
+                g = float(g)  # converting to float is fine because Javascript numbers are native double-float anyway.
             resp[r] = g
     return resp
 
-def get_station_calibration_mongo(station_number, params, json_safe=True):
-    client = MongoClient(config.MONGODB_HOST, config.MONGODB_PORT)  # 27017
+async def get_station_calibration_mongo(station_number, params, json_safe=True):
+    mongo_client = get_mongo_client()
     station_number = int(station_number)
     params = params or {}
     property_filter = params.get('property_filter', [])
@@ -119,29 +149,40 @@ def get_station_calibration_mongo(station_number, params, json_safe=True):
         select_filter = None
     if select_filter is None:
         select_filter = {'_id': False}
-    db = client.cosmoz
+    db = mongo_client.cosmoz
     stations_calibration_collection = db.stations_calibration
-    rows = stations_calibration_collection.find({'site_no': station_number}, projection=select_filter)
-    if rows is None:
-        raise LookupError("Cannot find site calibration.")
+    s = await mongo_client.start_session()
+    try:
+        cursor = stations_calibration_collection.find({'site_no': station_number}, projection=select_filter)
+        if cursor is None:
+            raise LookupError("Cannot find site calibration.")
 
-    #resp = { station_column_to_variable_map[c]: v for c,v in row.items() if c in station_column_to_variable_map.keys() }
-    # if 'installation_date' in resp:
-    #     resp['installation_date'] = datetime_to_iso(resp['installation_date'])
-    responses = []
-    for resp in rows:
-        if "_id" in resp:
-            del resp['id']
-        for r, v in resp.items():
-            if isinstance(v, datetime.datetime):
-                resp[r] = datetime_to_date_string(v)
-            elif isinstance(v, bson.decimal128.Decimal128):
-                g = v.to_decimal()
-                if json_safe and g.is_nan():
-                    g = "NaN"
-                resp[r] = g
+        #resp = { station_column_to_variable_map[c]: v for c,v in row.items() if c in station_column_to_variable_map.keys() }
+        # if 'installation_date' in resp:
+        #     resp['installation_date'] = datetime_to_iso(resp['installation_date'])
+        responses = []
+        while (await cursor.fetch_next):
+            resp = cursor.next_object()
+            if "_id" in resp:
+                del resp['id']
+            for r, v in resp.items():
+                if isinstance(v, datetime.datetime):
+                    if v.tzinfo is None:
+                        v = v.replace(tzinfo=datetime.timezone.utc)
+                    if json_safe and json_safe != "orjson":  # orjson can handle native datetimes
+                        v = datetime_to_iso(v)
+                    resp[r] = v
+                elif isinstance(v, bson.decimal128.Decimal128):
+                    g = v.to_decimal()
+                    if json_safe and g.is_nan():
+                        g = 'NaN'
+                    elif json_safe == "orjson":  # orjson can't do decimal
+                        g = float(g)  # converting to float is fine because Javascript numbers are native double-float anyway.
+                    resp[r] = g
 
-        responses.append(resp)
+            responses.append(resp)
+    finally:
+        await s.end_session()
     count = len(responses)
     resp = {
         'meta': {
@@ -153,9 +194,8 @@ def get_station_calibration_mongo(station_number, params, json_safe=True):
     return resp
 
 
-
-def get_stations_mongo(params):
-    client = MongoClient(config.MONGODB_HOST, config.MONGODB_PORT)  # 27017
+async def get_stations_mongo(params, json_safe=True):
+    mongo_client = get_mongo_client()
     params = params or {}
     property_filter = params.get('property_filter', [])
     count = params.get('count', 1000)
@@ -174,39 +214,51 @@ def get_stations_mongo(params):
     else:
         select_filter = None
 
-    db = client.cosmoz
+    db = mongo_client.cosmoz
     all_stations_collection = db.all_stations
-
-    all_stations_cur = all_stations_collection.find({}, projection=select_filter, skip=offset, limit=count)
-
-    if all_stations_cur is None:
-        raise LookupError("Cannot find any sites.")
-    count = 0
-    stations = []
-    for _row in all_stations_cur:
-        station = _row
-        #station = { station_column_to_variable_map[c]: v
-        #            for c,v in _row.items() if c in station_column_to_variable_map.keys() }
-        for r, v in station.items():
-            if isinstance(v, datetime.datetime):
-                station[r] = datetime_to_iso(v)
-            elif isinstance(v, bson.decimal128.Decimal128):
-                station[r] = v.to_decimal()
-        if select_filter is None or select_filter.get('_id', False) is False:
-            if '_id' in station:
-                del station['_id']
-        stations.append(station)
-        count += 1
+    s = await mongo_client.start_session()
+    try:
+        all_stations_cur = all_stations_collection.find({}, projection=select_filter, skip=offset, limit=count, session=s)
+        if all_stations_cur is None:
+            raise LookupError("Cannot find any sites.")
+        count = 0
+        stations = []
+        while (await all_stations_cur.fetch_next):
+            station = all_stations_cur.next_object()
+            #station = { station_column_to_variable_map[c]: v
+            #            for c,v in _row.items() if c in station_column_to_variable_map.keys() }
+            for r, v in station.items():
+                if isinstance(v, datetime.datetime):
+                    if v.tzinfo is None:
+                        v = v.replace(tzinfo=datetime.timezone.utc)
+                    if json_safe and json_safe != "orjson": #orjson can handle native datetimes
+                        v = datetime_to_iso(v)
+                    station[r] = v
+                elif isinstance(v, bson.decimal128.Decimal128):
+                    g = v.to_decimal()
+                    if json_safe and g.is_nan():
+                        g = 'NaN'
+                    elif json_safe == "orjson":  # orjson can't do decimal
+                        g = float(g)  # converting to float is fine because Javascript numbers are native double-float anyway.
+                    station[r] = g
+            if select_filter is None or select_filter.get('_id', False) is False:
+                if '_id' in station:
+                    del station['_id']
+            stations.append(station)
+            count += 1
+    finally:
+        await s.end_session()
     resp = {
         'meta': {
-        'count': count,
-        'offset': offset,
+            'count': count,
+            'offset': offset,
         },
         'stations': stations,
     }
     return resp
 
 def get_last_observations_influx(site_number, params, json_safe=True, excel_safe=False):
+    influx_client = get_influx_client()
     site_number = int(site_number)
     params = params or {}
     processing_level = params.get('processing_level', 3)
@@ -262,6 +314,7 @@ def get_last_observations_influx(site_number, params, json_safe=True, excel_safe
     return resp
 
 def get_observations_influx(site_number, params, json_safe=True, excel_safe=False):
+    influx_client = get_influx_client()
     site_number = int(site_number)
     params = params or {}
     processing_level = params.get('processing_level', 3)
@@ -346,14 +399,17 @@ def get_observations_influx(site_number, params, json_safe=True, excel_safe=Fals
         #    observation['time'] = datetime_to_iso(observation['timestamp'])
         observations.append(observation)
         count = count+1
+    if json_safe and json_safe != 'orjson':
+        startdate = datetime_to_iso(startdate) if startdate else ''
+        enddate = datetime_to_iso(enddate) if enddate else '',
     resp = {
         'meta': {
         'site_no': site_number,
         'processing_level': processing_level,
         'count': count,
         'offset': offset,
-        'start_date': datetime_to_iso(startdate) if startdate else '',
-        'end_date': datetime_to_iso(enddate) if enddate else '',
+        'start_date': startdate,
+        'end_date': enddate
         },
         'observations': observations,
     }
