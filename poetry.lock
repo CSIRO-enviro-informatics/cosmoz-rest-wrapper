@@ -484,7 +484,7 @@ description = "Sanic plugin for capturing and logging access"
 name = "sanic-metrics"
 optional = false
 python-versions = ">=3.6,<4.0"
-version = "0.0.4"
+version = "0.0.5"
 
 [package.dependencies]
 aiofiles = ">=0.4.0,<0.5.0"
@@ -681,7 +681,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "25c908f4a1207bc61befcf67403efd1f436d28551b047c0caecbeb86e8c4bc4d"
+content-hash = "a8b811dbc74aa829aca2700e85a607dc988693a90b18346adf123bbc135f1abf"
 python-versions = "^3.6"
 
 [metadata.files]
@@ -969,8 +969,8 @@ sanic-jinja2-spf = [
     {file = "Sanic_Jinja2_SPF-0.7.5-py2.py3-none-any.whl", hash = "sha256:e5bcc5393650c333cd04576ef3312ae3c9bbae75d072b1265b39a97f597590b9"},
 ]
 sanic-metrics = [
-    {file = "sanic-metrics-0.0.4.tar.gz", hash = "sha256:43b8895b50e98547f11d5001417d3bfe4eea9bdc0a6a31b6449bd12e0a0cfbbd"},
-    {file = "sanic_metrics-0.0.4-py3-none-any.whl", hash = "sha256:c079b2873a9dad86d13a6fbbf01e306fe117a688d5b6bee8f0b8e56ef8bce860"},
+    {file = "sanic-metrics-0.0.5.tar.gz", hash = "sha256:8dbd842042830d085288ec7a0e681c1a622f1ac5bb594962b3d01ae57e01d537"},
+    {file = "sanic_metrics-0.0.5-py3-none-any.whl", hash = "sha256:c5a7927702598b9277f4545114430ae8fa53b11b283dc8184ddbf8a2aefde48b"},
 ]
 sanic-oauthlib = [
     {file = "Sanic-OAuthlib-0.1.4.tar.gz", hash = "sha256:a1cc767ef1a4bdfc179f4991f5126c89539ba4ced6869e301278dec77ce9f586"},
