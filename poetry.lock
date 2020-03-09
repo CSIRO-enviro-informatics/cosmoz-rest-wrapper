@@ -318,7 +318,7 @@ description = "Fast, correct Python JSON library supporting dataclasses, datetim
 name = "orjson"
 optional = false
 python-versions = ">=3.6"
-version = "2.5.1"
+version = "2.5.2"
 
 [[package]]
 category = "main"
@@ -484,7 +484,7 @@ description = "Sanic plugin for capturing and logging access"
 name = "sanic-metrics"
 optional = false
 python-versions = ">=3.6,<4.0"
-version = "0.0.5"
+version = "0.0.6"
 
 [package.dependencies]
 aiofiles = ">=0.4.0,<0.5.0"
@@ -525,7 +525,7 @@ description = "Fully featured framework for fast, easy and documented API develo
 name = "sanic-restplus"
 optional = false
 python-versions = "*"
-version = "0.5.3.post1"
+version = "0.5.3.post2"
 
 [package.dependencies]
 aniso8601 = ">=0.82"
@@ -604,8 +604,8 @@ category = "main"
 description = "Ultra fast JSON encoder and decoder for Python"
 name = "ujson"
 optional = false
-python-versions = "*"
-version = "1.35"
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+version = "2.0.1"
 
 [[package]]
 category = "main"
@@ -681,7 +681,7 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "a8b811dbc74aa829aca2700e85a607dc988693a90b18346adf123bbc135f1abf"
+content-hash = "1031a58cb17084347cd341abb5cc2e51d260b8e2f14621e578fb05003bc86a2a"
 python-versions = "^3.6"
 
 [metadata.files]
@@ -858,17 +858,20 @@ oauthlib = [
     {file = "oauthlib-2.0.6.tar.gz", hash = "sha256:ce57b501e906ff4f614e71c36a3ab9eacbb96d35c24d1970d2539bbc3ec70ce1"},
 ]
 orjson = [
-    {file = "orjson-2.5.1-cp36-cp36m-macosx_10_7_x86_64.whl", hash = "sha256:45e87784efe07b465a60673bacc91407b09f984a420479fe5f6b0fb143f985b2"},
-    {file = "orjson-2.5.1-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:60a9f1061fe04b5249aa16a92012899e24ff6422ccde39c9bfeedc41159588f6"},
-    {file = "orjson-2.5.1-cp36-none-win_amd64.whl", hash = "sha256:ef89160b3b1890cd9353a14c8083e927363c7cb7fefabb071ca2a0d7888fd543"},
-    {file = "orjson-2.5.1-cp37-cp37m-macosx_10_7_x86_64.whl", hash = "sha256:a3c3594a587a7de9c1416a85b3cc9383283f7370a670789fbd8077b21c80dc24"},
-    {file = "orjson-2.5.1-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:5a19c8f0023c5d04211261915b1116de4de0318e414f8e60819943e6f94d5690"},
-    {file = "orjson-2.5.1-cp37-none-win_amd64.whl", hash = "sha256:63815d36c3a0ad0922990faf01aa1344facf662322c572cd2a9a5ef9ab0f8903"},
-    {file = "orjson-2.5.1-cp38-cp38-macosx_10_7_x86_64.whl", hash = "sha256:a23d88f79534336bfccf75313d7c45e54615753970134cd4fdfcfada09d884ed"},
-    {file = "orjson-2.5.1-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:afa6b0662116fb8e03604dc4c8eb8d8fc07a0c9c5401b3aa4bb9ed75e9a91fb1"},
-    {file = "orjson-2.5.1-cp38-none-win_amd64.whl", hash = "sha256:01d6e8a5bdd5cd75e8e241ec837073236b557e9f3e8d35ddb4bccb418c61721e"},
-    {file = "orjson-2.5.1-cp39-cp39-manylinux1_x86_64.whl", hash = "sha256:1b4ce958d6e356f2c8eee65e1201d9c04b50a44d398e0febb744c6a7afa05223"},
-    {file = "orjson-2.5.1.tar.gz", hash = "sha256:af588778834e195085b5ab64a7ba1642722ede82e4668c6a9cb57a66458633cf"},
+    {file = "orjson-2.5.2-cp36-cp36m-macosx_10_7_x86_64.whl", hash = "sha256:02bdc4cea52646bb5c8a44cf8afb6ac14ac3caf502018824a6a5dc0eccf21f6d"},
+    {file = "orjson-2.5.2-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:b0fd4c202099eba1e27bd7c1d47e3a073c7f95edcbc5262a14da2b11add198ed"},
+    {file = "orjson-2.5.2-cp36-cp36m-manylinux2014_aarch64.whl", hash = "sha256:475226545101afa8136bcfc98e8eb63ce92641516ab0319e434e6f4993a2b5ec"},
+    {file = "orjson-2.5.2-cp36-none-win_amd64.whl", hash = "sha256:c09b9e368413fcebcef82c32c275e7ba7736950d41e34ed53a9953d3b962fecf"},
+    {file = "orjson-2.5.2-cp37-cp37m-macosx_10_7_x86_64.whl", hash = "sha256:103f57251d5398804128d05e104ca815757468cb67466b7c04a1a134c3c74285"},
+    {file = "orjson-2.5.2-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:c1b0bb17a963ab2a5c49eb0024b223fd3f38a10dbd1dd58a21ed01d3450deb5b"},
+    {file = "orjson-2.5.2-cp37-cp37m-manylinux2014_aarch64.whl", hash = "sha256:5e6688075dddcedbe286ff9691512c23beeb60cc0af6bd1201086c6be15333d8"},
+    {file = "orjson-2.5.2-cp37-none-win_amd64.whl", hash = "sha256:c150c4b51b755c9a82b5b4798f521fa5c6474482e65cfdb08d54ae6e250184f7"},
+    {file = "orjson-2.5.2-cp38-cp38-macosx_10_7_x86_64.whl", hash = "sha256:e61b40e5c0498996db26a7e1f0d62f6cd9df1f27dbb8928dd1ef79527964f6a6"},
+    {file = "orjson-2.5.2-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:82afc215173a789ba13259898056f12241fa6b7670cf8a3138df2bad5860eff6"},
+    {file = "orjson-2.5.2-cp38-cp38-manylinux2014_aarch64.whl", hash = "sha256:c545aa3d4b769742ed459b398643432a93accba2747397721fea9df250ee0f14"},
+    {file = "orjson-2.5.2-cp38-none-win_amd64.whl", hash = "sha256:2a336ba7fd14fb27a5056c64f51eb37fed9ff099e6589a2312ee1263e6c2ea1c"},
+    {file = "orjson-2.5.2-cp39-cp39-manylinux1_x86_64.whl", hash = "sha256:d6f2485f404e79766169cd948574b888596ff2a777e1b365e85b7c9902a2100f"},
+    {file = "orjson-2.5.2.tar.gz", hash = "sha256:e3f37ff368d0c9ad93f65e264d5b2a06c2bf652834ea3008c9dd862c1de76208"},
 ]
 pymongo = [
     {file = "pymongo-3.10.1-cp27-cp27m-macosx_10_14_intel.whl", hash = "sha256:a732838c78554c1257ff2492f5c8c4c7312d0aecd7f732149e255f3749edd5ee"},
@@ -969,8 +972,8 @@ sanic-jinja2-spf = [
     {file = "Sanic_Jinja2_SPF-0.7.5-py2.py3-none-any.whl", hash = "sha256:e5bcc5393650c333cd04576ef3312ae3c9bbae75d072b1265b39a97f597590b9"},
 ]
 sanic-metrics = [
-    {file = "sanic-metrics-0.0.5.tar.gz", hash = "sha256:8dbd842042830d085288ec7a0e681c1a622f1ac5bb594962b3d01ae57e01d537"},
-    {file = "sanic_metrics-0.0.5-py3-none-any.whl", hash = "sha256:c5a7927702598b9277f4545114430ae8fa53b11b283dc8184ddbf8a2aefde48b"},
+    {file = "sanic-metrics-0.0.6.tar.gz", hash = "sha256:950b9e87ce27db6cd143a313f60a845a89171a6253f95e9fe441ff9a6382005e"},
+    {file = "sanic_metrics-0.0.6-py3-none-any.whl", hash = "sha256:48775efb03259f018ee078353227f399f005af0bd6414d3a1e2e3606dfcb7016"},
 ]
 sanic-oauthlib = [
     {file = "Sanic-OAuthlib-0.1.4.tar.gz", hash = "sha256:a1cc767ef1a4bdfc179f4991f5126c89539ba4ced6869e301278dec77ce9f586"},
@@ -981,8 +984,8 @@ sanic-plugins-framework = [
     {file = "Sanic_Plugins_Framework-0.9.2-py2.py3-none-any.whl", hash = "sha256:2949374e414a497a3b07b09800d3d0b3cdf24f3a1d3f08591488759099cb7f44"},
 ]
 sanic-restplus = [
-    {file = "sanic-restplus-0.5.3.post1.tar.gz", hash = "sha256:7db69f38a925766fd9818f782cc89b25330cf8a815c5e4dea3a61d16aa762ed6"},
-    {file = "sanic_restplus-0.5.3.post1-py2.py3-none-any.whl", hash = "sha256:310c8fe0462cd5304c1d5bcfef5d7578c03cdfa6224bed66575e4ce65b35a560"},
+    {file = "sanic-restplus-0.5.3.post2.tar.gz", hash = "sha256:b9bd1e98319a4e90846841bb6fcee633abb27041854c90b5df7a3887a490cd16"},
+    {file = "sanic_restplus-0.5.3.post2-py2.py3-none-any.whl", hash = "sha256:963d3f5b45a0f7c57790040025e877f51c60a5c4078c11660ed7664f56d231dd"},
 ]
 sanic-session = [
     {file = "sanic_session-0.6.0-py3-none-any.whl", hash = "sha256:1107942c028ffc1dc20df800f975216836503a103b865c8154c33fe850d9017f"},
@@ -1006,7 +1009,7 @@ typing-extensions = [
     {file = "typing_extensions-3.7.4.1.tar.gz", hash = "sha256:091ecc894d5e908ac75209f10d5b4f118fbdb2eb1ede6a63544054bb1edb41f2"},
 ]
 ujson = [
-    {file = "ujson-1.35.tar.gz", hash = "sha256:f66073e5506e91d204ab0c614a148d5aa938bdbf104751be66f8ad7a222f5f86"},
+    {file = "ujson-2.0.1.tar.gz", hash = "sha256:0a88069adf9f99acb301c9902c7e31f73cd928f63a03657805a9e79e3b391f44"},
 ]
 urllib3 = [
     {file = "urllib3-1.25.8-py2.py3-none-any.whl", hash = "sha256:2f3db8b19923a873b3e5256dc9c2dedfa883e33d87c690d9c7913e1f40673cdc"},

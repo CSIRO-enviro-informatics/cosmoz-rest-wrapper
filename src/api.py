@@ -14,21 +14,19 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-import sys
 from collections import OrderedDict
 import datetime
 from datetime import datetime, timezone, timedelta
+from urllib.parse import urlsplit
 from sanic_restplus import Api, Resource, fields
 from sanic.response import json, text, stream, HTTPResponse
 from sanic.exceptions import ServiceUnavailable
 from sanic_jinja2_spf import sanic_jinja2
 from orjson import dumps as fast_dumps, OPT_NAIVE_UTC, OPT_UTC_Z
 from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
-from util import PY_36
+from util import PY_36, datetime_from_iso
 
 orjson_option = OPT_NAIVE_UTC | OPT_UTC_Z
-
-url_prefix = 'rest'
 
 security_defs = {
     # X-API-Key: abcdef12345
@@ -45,7 +43,7 @@ security_defs = {
 }
 
 api = Api(title="CSIRO Cosmoz REST Interface",
-          prefix=url_prefix, doc='/'.join([url_prefix, "doc"]),
+          prefix='', doc='/doc',
           authorizations=security_defs,
           default_mediatype="application/json",
           additional_css="/static/material_swagger.css")
@@ -602,3 +600,58 @@ class LastObservations(Resource):
 
         return stream(streaming_fn, status=200, headers=headers, content_type=return_type)
 
+@ns.route("/metrics", doc=False)
+class Metrics(Resource):
+    async def post(self, request, context):
+        rcontext = context.for_request(request)
+        shared_context = context.shared
+        shared_rcontext = shared_context.for_request(request)
+
+        action = request.args.getlist('action', None)
+        if action:
+            action = next(iter(action))
+        else:
+            raise RuntimeError("action is mandatory.")
+        metrics_override = {
+            'method': 'GET',
+            'status': 200,
+            'skip_response': True,
+        }
+        referer = request.headers.getall('Referer')
+        if referer:
+            referer = next(iter(referer))
+            try:
+                (scheme, netloc, path, query, fragment) = urlsplit(referer)
+                metrics_override['host'] = netloc
+                metrics_override['path'] = path
+            except:
+                pass
+        else:
+            # No referer, this will be hard to track
+            pass
+        if action == "page_visit":
+            time = request.args.getlist('time', None)
+            if time:
+                time = next(iter(time))
+                try:
+                    metrics_override['datetime_start_iso'] = time
+                    t = datetime_from_iso(time)
+                    metrics_override['timestamp_start'] = t.timestamp()
+                    metrics_override['datetime_start'] = t
+                except Exception:
+                    pass
+            page = request.args.getlist('page', None)
+            if page:
+                page = next(iter(page))
+                metrics_override['path'] = page
+            query = request.args.getlist('query', None)
+            if query:
+                query = next(iter(query))
+            else:
+                query = None
+            metrics_override['qs'] = query
+        else:
+            raise NotImplementedError(action)
+        shared_rcontext['override_metrics'] = metrics_override
+        res = {"result": "success"}
+        return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
