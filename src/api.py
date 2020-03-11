@@ -23,6 +23,8 @@ from sanic.response import json, text, stream, HTTPResponse
 from sanic.exceptions import ServiceUnavailable
 from sanic_jinja2_spf import sanic_jinja2
 from orjson import dumps as fast_dumps, OPT_NAIVE_UTC, OPT_UTC_Z
+
+from config import TRUTHS
 from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
 from util import PY_36, datetime_from_iso
 
@@ -212,6 +214,7 @@ class Station(Resource):
             "property_filter": property_filter,
         }
         json_safe = 'orjson' if return_type == "application/json" else False
+        json_safe = 'txt' if return_type == "text/plain" else json_safe
         res = await get_station_mongo(station_no, obs_params, json_safe=json_safe)
         if return_type == "application/json":
             return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
@@ -399,7 +402,7 @@ class Observations(Resource):
                 property_filter = [p for p in property_filter if len(p)]
         else:
             property_filter = "*"
-        excel_compat = bool(request.args.getlist('excel_compat', [False])[0])
+        excel_compat = request.args.getlist('excel_compat', [False])[0] in TRUTHS
         aggregate = request.args.getlist('aggregate', None)
         if aggregate:
             aggregate = str(next(iter(aggregate)))
@@ -531,7 +534,7 @@ class LastObservations(Resource):
             processing_level = int(next(iter(processing_level)))
         else:
             processing_level = 4
-        excel_compat = bool(request.args.getlist('excel_compat', [False])[0])
+        excel_compat = request.args.getlist('excel_compat', [False])[0] in TRUTHS
         not_json = return_type != "application/json"
         if not not_json:
             property_filter = request.args.getlist('property_filter', None)

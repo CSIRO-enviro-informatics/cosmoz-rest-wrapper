@@ -109,8 +109,6 @@ async def get_station_mongo(station_number, params, json_safe=True):
     if select_filter is None or select_filter.get('_id', False) is False:
         if '_id' in resp:
             del resp['_id']
-    # if 'installation_date' in resp:
-    #     resp['installation_date'] = datetime_to_iso(resp['installation_date'])
     for r,v in resp.items():
         if isinstance(v, datetime.datetime):
             if json_safe and json_safe != "orjson":  # orjson can handle native datetimes
