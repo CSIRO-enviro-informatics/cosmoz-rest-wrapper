@@ -214,20 +214,20 @@ class Station(Resource):
             "property_filter": property_filter,
         }
         json_safe = 'orjson' if return_type == "application/json" else False
-        json_safe = 'txt' if return_type == "text/plain" else json_safe
-        res = await get_station_mongo(station_no, obs_params, json_safe=json_safe)
+        jinja_safe = 'txt' if return_type == "text/plain" else False
+        res = await get_station_mongo(station_no, obs_params, json_safe=json_safe, jinja_safe=jinja_safe)
         if return_type == "application/json":
             return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
-        elif return_type == "applcation/csv":
+        elif return_type == "application/csv":
             raise NotImplementedError()
             #return build_csv(res)
         elif return_type == "text/plain":
             headers = {'Content-Type': return_type}
             jinja2 = get_jinja2_for_api(self.api)
             if PY_36:
-                return await jinja2.render_async('site_values_txt.html', request, headers=headers, **res)
+                return await jinja2.render_async('site_values_txt.html', request, headers=headers, status=200, **res)
             else:
-                return jinja2.render('site_values_txt.html', request, headers=headers, **res)
+                return jinja2.render('site_values_txt.html', request, headers=headers, status=200, **res)
 
     @ns.doc('put_station', params=OrderedDict([
         ("name", {"description": "Station Name",
@@ -282,7 +282,9 @@ class StationCalibration(Resource):
             "property_filter": property_filter,
         }
         json_safe = 'orjson' if return_type == "application/json" else False
-        res = await get_station_calibration_mongo(station_no, obs_params, json_safe)
+        jinja_safe = 'txt' if return_type == "text/plain" else False
+        jinja_safe = 'csv' if return_type == "text/csv" else jinja_safe
+        res = await get_station_calibration_mongo(station_no, obs_params, json_safe=json_safe, jinja_safe=jinja_safe)
         if return_type == "application/json":
             return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
         headers = {'Content-Type': return_type}

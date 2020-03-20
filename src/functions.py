@@ -77,7 +77,7 @@ station_variable_to_column_map = {
 
 station_column_to_variable_map = { v: k for k,v in station_variable_to_column_map.items() }
 
-async def get_station_mongo(station_number, params, json_safe=True):
+async def get_station_mongo(station_number, params, json_safe=True, jinja_safe=False):
     mongo_client = get_mongo_client()
     station_number = int(station_number)
     params = params or {}
@@ -109,9 +109,12 @@ async def get_station_mongo(station_number, params, json_safe=True):
     if select_filter is None or select_filter.get('_id', False) is False:
         if '_id' in resp:
             del resp['_id']
-    for r,v in resp.items():
+    if jinja_safe and 'status' in resp:
+        resp['_status'] = resp['status']
+        del resp['status']
+    for r, v in resp.items():
         if isinstance(v, datetime.datetime):
-            if json_safe and json_safe != "orjson":  # orjson can handle native datetimes
+            if (json_safe and json_safe != "orjson") or jinja_safe:  # orjson can handle native datetimes
                 v = datetime_to_iso(v)
             resp[r] = v
         elif isinstance(v, bson.decimal128.Decimal128):
@@ -123,7 +126,7 @@ async def get_station_mongo(station_number, params, json_safe=True):
             resp[r] = g
     return resp
 
-async def get_station_calibration_mongo(station_number, params, json_safe=True):
+async def get_station_calibration_mongo(station_number, params, json_safe=True, jinja_safe=False):
     mongo_client = get_mongo_client()
     station_number = int(station_number)
     params = params or {}
@@ -161,7 +164,7 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True):
                 del resp['id']
             for r, v in resp.items():
                 if isinstance(v, datetime.datetime):
-                    if json_safe and json_safe != "orjson":  # orjson can handle native datetimes
+                    if (json_safe and json_safe != "orjson") or jinja_safe: # orjson can handle native datetimes
                         v = datetime_to_iso(v)
                     resp[r] = v
                 elif isinstance(v, bson.decimal128.Decimal128):
@@ -186,7 +189,7 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True):
     return resp
 
 
-async def get_stations_mongo(params, json_safe=True):
+async def get_stations_mongo(params, json_safe=True, jinja_safe=False):
     mongo_client = get_mongo_client()
     params = params or {}
     property_filter = params.get('property_filter', [])
@@ -219,9 +222,12 @@ async def get_stations_mongo(params, json_safe=True):
             station = all_stations_cur.next_object()
             #station = { station_column_to_variable_map[c]: v
             #            for c,v in _row.items() if c in station_column_to_variable_map.keys() }
+            if jinja_safe and 'status' in station:
+                station['_status'] = station['status']
+                del station['status']
             for r, v in station.items():
                 if isinstance(v, datetime.datetime):
-                    if json_safe and json_safe != "orjson": #orjson can handle native datetimes
+                    if (json_safe and json_safe != "orjson") or jinja_safe: #orjson can handle native datetimes
                         v = datetime_to_iso(v)
                     station[r] = v
                 elif isinstance(v, bson.decimal128.Decimal128):

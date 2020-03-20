@@ -1,4 +1,4 @@
 YYYY-MM-DD    LABEL     LOC         DEPTH     VOL?    TOTAL    TOTAL     TARE     SOIL     SOIL      GWC       BD      VWC
        UTC                                             WET      DRY               WET      DRY
-{% for c in calibrations %}{{(c.date).rjust(10)}}  {{(c.label).rjust(7)}}  {{(c.loc).rjust(6)}}  {{(c.depth).rjust(12)}}  {{(c.vol).rjust(7)}}  {{"%7.2f"|format(c.total_wet)}}  {{"%7.2f"|format(c.total_dry)}}  {{"%7.2f"|format(c.tare)}}  {{"%7.2f"|format(c.soil_wet)}}  {{"%7.2f"|format(c.soil_dry)}}  {{"%7.2f"|format(c.gwc)}}  {{"%7.2f"|format(c.bd)}}  {{"%7.2f"|format(c.vwc)}}
+{% for c in calibrations %}{{(c.date|truncate(10, end="")).rjust(10)}}  {{(c.label).rjust(7)}}  {{(c.loc).rjust(6)}}  {{(c.depth).rjust(12)}}  {{(c.vol).rjust(7)}}  {{"%7.2f"|format(c.total_wet)}}  {{"%7.2f"|format(c.total_dry)}}  {{"%7.2f"|format(c.tare)}}  {{"%7.2f"|format(c.soil_wet)}}  {{"%7.2f"|format(c.soil_dry)}}  {{"%7.2f"|format(c.gwc)}}  {{"%7.2f"|format(c.bd)}}  {{"%7.2f"|format(c.vwc)}}
 {% endfor %}
