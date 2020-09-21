@@ -1,4 +1,4 @@
 UTC_TIMESTAMP          SOILMOIST       DEPTH        RAIN  FLAG
-YYYY-MM-DDTHH:MM:SSZ       m3/m3          cm          mm
+YYYY-MM-DDTHH:MM:SSZ           %          cm          mm
 {% for o in observations %}{{(o.time).rjust(20)}}  {{"%10.3f"|format(o.soil_moist)}}  {{"%10.3f"|format(o.effective_depth)}}  {{"%10.3f"|format(o.rainfall)}}  {{(o.flag).rjust(4)}}
 {% endfor %}

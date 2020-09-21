@@ -1,4 +1,4 @@
 UTC_TIMESTAMP          SOILMOIST       DEPTH        RAIN  7HSOILMOIST     7HDEPTH
-YYYY-MM-DDTHH:MM:SSZ       m3/m3          cm          mm        m3/m3          cm
+YYYY-MM-DDTHH:MM:SSZ           %          cm          mm            %          cm
 {% for o in observations %}{{(o.time).rjust(20)}}  {{"%10.3f"|format(o.soil_moist)}}  {{"%10.3f"|format(o.effective_depth)}}  {{"%10.3f"|format(o.rainfall)}}  {{"%11.3f"|format(o.soil_moist_filtered)}}  {{"%10.3f"|format(o.depth_filtered)}}
 {% endfor %}
