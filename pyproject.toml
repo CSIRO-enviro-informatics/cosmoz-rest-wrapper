@@ -1,5 +1,5 @@
 [build-system]
-requires = ["poetry>=1.0.10"]
+requires = ["poetry>=1.1.0"]
 build-backend = "poetry.masonry.api"
 
 [tool.poetry]
@@ -16,7 +16,7 @@ python = "^3.6"
 sanic = "~19.6.3"
 sanic-plugins-framework = "~0.9.4"
 sanic-cors = "^0.10.0.post3"
-sanic-restplus = "~0.5.3.post3"
+sanic-restplus = "~0.5.4"
 sanic-jinja2-spf = "*"
 sanic-oauthlib = "^0.1.4"
 sanic-session-spf = "*"
