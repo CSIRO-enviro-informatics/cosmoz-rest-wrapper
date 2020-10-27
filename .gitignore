@@ -266,3 +266,5 @@ $RECYCLE.BIN/
 *.lnk
 
 src/_sql_db_config.py
+
+src/sessionstore.pickle
