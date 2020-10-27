@@ -193,4 +193,4 @@ if __name__ == "__main__":
     else:
         host = server_name
         port = 9001
-    app.run(host=host, port=port, debug=config.DEBUG, auto_reload=False)
+    app.run(host=host, port=port, debug=config.DEBUG, auto_reload=config.AUTO_RELOAD)
