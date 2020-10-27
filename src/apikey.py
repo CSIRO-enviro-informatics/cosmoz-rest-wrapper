@@ -1,10 +1,10 @@
 from collections import OrderedDict
 import secrets
 import bson
-import oauth1_client
+import oauth1_routes
+import oauth2_routes
 from pymongo import MongoClient
 import config
-from sanic.response import redirect
 from util import datetime_to_iso, datetime_from_iso
 import datetime
 
@@ -133,9 +133,9 @@ async def test_apikey(apikey):
         raise RuntimeError("Cannot test API-Key, required credentials missing")
     oauth_client = record.get('oauth_client', None)
     if is_v1:
-        works = await oauth1_client.test_oauth_token(oauth_client, access_token, access_token_secret)
+        works = await oauth1_routes.test_oauth1_token(oauth_client, access_token, access_token_secret)
     else:
-        raise NotImplementedError("OAuth2 client is not implemented yet.")
+        works = await oauth2_routes.test_oauth2_token(oauth_client, access_token)
     if not works:
         return False, "API-Key associated oauth access_token does not work. Perhaps it has been revoked."
     return True, "OK"
@@ -155,7 +155,7 @@ async def create_apikey_from_access_token(oauth_client, oauth_v, oauth_resp):
         except AttributeError:
             raise RuntimeError("Access token was not received from the oauth2 provider.")
         access_token_secret = ""
-        scopes_or_realms = oauth_resp.get('oauth_scopes')
+        scopes_or_realms = oauth_resp.get('scope')
 
     try:
         exists = find_apikey_by_access_token_mongo(access_token, None)
@@ -174,10 +174,11 @@ async def create_apikey_from_access_token(oauth_client, oauth_v, oauth_resp):
         "oauth_v": oauth_v,
         "oauth_client": oauth_client,
         "created": now,
-        "expires": now + datetime.timedelta(days=7) # TODO, is 7 days right?
+        "expires": now + datetime.timedelta(days=7)  # TODO, is 7 days right?
     }
     new_record = put_apikey_mongo(apikey, params, renew=False)
     return new_record['apikey']
+
 
 async def renew_apikey_from_access_token(oauth_client, oauth_v, apikey, oauth_resp):
     if oauth_v in ("1", "1.1", "1.0a", 1):

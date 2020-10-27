@@ -22,6 +22,7 @@ from urllib.parse import quote_plus
 from sanic.exceptions import Unauthorized
 from sanic.response import HTTPResponse, text, redirect
 from sanic import Sanic
+from sanic.request import Request
 from spf import SanicPluginsFramework
 from spf.plugins.contextualize import contextualize
 from sanic_cors.extension import cors
@@ -37,7 +38,8 @@ if HERE_DIR not in sys.path:
 from api import api
 from apikey import check_apikey_valid, test_apikey, create_apikey_from_access_token
 from util import PY_36
-import oauth1_client
+import oauth1_routes
+import oauth2_routes
 
 print("Using OVERRIDE_SERVER_NAME: {}".format(config.OVERRIDE_SERVER_NAME))
 print("Using SANIC_PROXY_ROUTE_BASE: {}".format(config.PROXY_ROUTE_BASE))
@@ -65,40 +67,87 @@ sanic_jinja2, jinja2_reg = spf.register_plugin(sanic_jinja2, enable_async=PY_36,
 restplus, restplus_reg = spf.register_plugin(restplus, _url_prefix="rest")
 metrics_filename = os.path.join(config.METRICS_DIRECTORY, "access_{date:s}.txt")
 metrics = spf.register_plugin(sanic_metrics, opt={'type': 'out'}, log={'format': 'vcombined', 'filename': metrics_filename})
-c = oauth1_client.create_client(app)
+_ = oauth1_routes.add_to_app(app)
+_ = oauth2_routes.add_to_app(app)
 file_loc = os.path.abspath(os.path.join(HERE_DIR, "static/material_swagger.css"))
 app.static(uri="/static/material_swagger.css", file_or_directory=file_loc,
            name="material_swagger")
 restplus.register_api(restplus_reg, api)
 
-@ctx.route("/apikey", methods=["GET", "HEAD", "OPTIONS"])
+APIKEY_USE_OAUTH2 = False  # if False, use Oauth 1.0a
+
+@ctx.route("/apikey", methods=["GET", "POST", "HEAD", "OPTIONS"])
 async def apikey(request, context):
+    """
+    :param request: sanic.request.Request
+    :param context:
+    :return:
+    """
     if request.method == "OPTIONS":
         return HTTPResponse(None, 200, None)
     existing_apikey = request.headers.get("X-API-Key")
     if existing_apikey:
         return await checkaccesskey(request, existing_apikey)
+    if request.method == "POST":
+        # We want to trade in an existing OAuth2 token for an apikey
+        access_token = request.form.get('access_token', request.token)
+        oauth_token = request.form.get('oauth_token', None)
+        cname = "_tradein"
+        if oauth_token:
+            s = request.form.get("oauth_token_secret", None)
+            if s is None:
+                raise Unauthorized("oauth_token_secret not given.")
+            works = await oauth1_routes.test_oauth1_token(cname, oauth_token, s)
+            if not works:
+                raise Unauthorized("Access token doesn't look valid for our oauth1 server.")
+            new_api_key = await create_apikey_from_access_token(
+                cname, "1.0a",
+                {"oauth_token": oauth_token, "oauth_token_secret": s,
+                 "oauth_authorized_realms": "none"}
+            )
+        elif access_token:
+            works = await oauth2_routes.test_oauth2_token(cname, access_token)
+            if not works:
+                raise Unauthorized("Access token doesn't look valid for our oauth2 server.")
+            new_api_key = await create_apikey_from_access_token(
+                cname, "2.0",
+                {"access_token": access_token, "scope": "none"}
+            )
+        else:
+            raise Unauthorized("No access_token or oauth_token given.")
+        return text(new_api_key, 200)
     shared_context = context.shared
     shared_request_context = shared_context.request[id(request)]
     session = shared_request_context.get('session', {})
-    state = session.get('oauth1_state', None)
+    state = session.get('oauth_state', None)
     if not state or ('access_token_session_key' not in state):
         after_this = context.url_for('apikey', _external=True, _scheme='http',
-                                  _server=OVERRIDE_SERVER_NAME)
-        redir_to = app.url_for('create_oauth', _external=True, _scheme='http',
-                               _server=OVERRIDE_SERVER_NAME)
+                                     _server=OVERRIDE_SERVER_NAME)
         if len(PROXY_ROUTE_BASE):
             after_this = after_this.replace("/apikey", "/{}apikey".format(
                 PROXY_ROUTE_BASE))
-            redir_to = redir_to.replace("/create_oauth", "/{}create_oauth".format(
-                PROXY_ROUTE_BASE))
+        if APIKEY_USE_OAUTH2:
+            redir_to = app.url_for('create_oauth2', _external=True, _scheme='http',
+                                   _server=OVERRIDE_SERVER_NAME)
+            if len(PROXY_ROUTE_BASE):
+                redir_to = redir_to.replace("/create_oauth2", "/{}create_oauth2".format(
+                    PROXY_ROUTE_BASE))
+        else:
+            redir_to = app.url_for('create_oauth', _external=True, _scheme='http',
+                                   _server=OVERRIDE_SERVER_NAME)
+            if len(PROXY_ROUTE_BASE):
+                redir_to = redir_to.replace("/create_oauth", "/{}create_oauth".format(
+                    PROXY_ROUTE_BASE))
+
         redir_to = "{}?after_authorized={}".format(redir_to, quote_plus(after_this))
         return redirect(redir_to)
     oauth_resp = session.get(state['access_token_session_key'], None)
     if not oauth_resp:
         raise Unauthorized("Could not create a new API Key")
-    client_name = state.get('remote_app', "client1")
-    new_api_key = await create_apikey_from_access_token(client_name, "1.0a", oauth_resp)
+    client_name = state.get("remote_app", "none")
+    oauth_version = state.get("oauth_version",
+                              "2.0" if APIKEY_USE_OAUTH2 else "1.0a")
+    new_api_key = await create_apikey_from_access_token(client_name, oauth_version, oauth_resp)
     return text(new_api_key, 200)
 
 
