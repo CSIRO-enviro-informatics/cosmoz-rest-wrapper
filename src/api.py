@@ -27,10 +27,9 @@ from orjson import dumps as fast_dumps, OPT_NAIVE_UTC, OPT_UTC_Z
 from config import TRUTHS
 from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
 from util import PY_36, datetime_from_iso
-from auth_functions import HTTPTokenAuthWithUser
+from auth_functions import token_auth
 
 orjson_option = OPT_NAIVE_UTC | OPT_UTC_Z
-token_auth = HTTPTokenAuthWithUser(scheme='Bearer')
 
 security_defs = {
     # X-API-Key: abcdef12345
@@ -668,22 +667,14 @@ class Metrics(Resource):
         res = {"result": "success"}
         return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
 
-@token_auth.verify_token
-def verify_token(token):
-    print("***** TOKEN *****")
-    print(token)
-    if token == 'token':
-        print("***** SUCCESS *****")
-        return {
-            "name": "shane",
-            "email": "shane.seaton@csiro.au"
-        }
-
-@ns.route("/userfortoken")
-class User(Resource):
-    @ns.doc('userfortoken', security=['AuthToken'])
+@ns.route("/users/me")
+class Users(Resource):
+    @ns.doc('get_userfortoken', security=['AuthToken'])
     @token_auth.login_required
-    def post(self, request):
-        """Exchange a valid auth token for the user details and an API_KEY"""
+    async def get(self, request):
+        """Exchange a valid auth token for the user details, perhaps an API_KEY if needed"""
         user = token_auth.current_user(request)
-        return user
+        if user:
+            return {
+                'user': user,
+            }

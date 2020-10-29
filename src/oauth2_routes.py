@@ -43,15 +43,16 @@ def create_oauth2_remote(app, oauth=None):
         oauth = add_oauth_plugin(app)
     consumer_key = getenv("OAUTH2_CSIRO_LDAP_CONSUMER_KEY", "example1")
     consumer_secret = getenv("OAUTH2_CSIRO_LDAP_CONSUMER_SECRET", "password1")
+    oauth_base_uri = getenv("OAUTH2_CSIRO_LDAP_BASE_URI", "https://oauth.esoil.io/")
     remote = oauth.remote_app(
         'csiro-to-ldap2',
         consumer_key=consumer_key,
         consumer_secret=consumer_secret,
         request_token_params={'scope': 'profile'},
-        base_url='https://oauth.esoil.io/api/',
+        base_url=f"{oauth_base_uri}api/",
         access_token_method='POST',
-        access_token_url='https://oauth.esoil.io/oauth2/token',
-        authorize_url='https://oauth.esoil.io/oauth2/authorize'
+        access_token_url=f"{oauth_base_uri}oauth2/token",
+        authorize_url=f"{oauth_base_uri}oauth2/authorize"
     )
     OAUTH2_REMOTES['csiro-to-ldap2'] = remote
     return remote
@@ -169,3 +170,16 @@ async def test_oauth2_token(client_name, access_token):
             if method == "GET":
                 return True
     return False
+
+async def get_profile(client_name, access_token):
+    if client_name is None or client_name.startswith("_") or \
+            client_name.lower() == "none":
+        # use the first one. This is a bit hacky.
+        client_name = next(iter(OAUTH2_REMOTES.keys()))
+    remote = OAUTH2_REMOTES.get(client_name, None)
+    if remote is None:
+        raise RuntimeError("Cannot get oauth2 remote with name \"{}\"".format(client_name))
+    resp = await remote.get("/api/profile", token=access_token)
+
+    if resp.status in (200, 201):
+        return resp.data
