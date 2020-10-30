@@ -224,10 +224,11 @@ class Station(Resource):
         elif return_type == "text/plain":
             headers = {'Content-Type': return_type}
             jinja2 = get_jinja2_for_api(self.api)
+            station = res['station']
             if PY_36:
-                return await jinja2.render_async('site_values_txt.html', request, headers=headers, status=200, **res)
+                return await jinja2.render_async('site_values_txt.html', request, headers=headers, status=200, **station)
             else:
-                return jinja2.render('site_values_txt.html', request, headers=headers, status=200, **res)
+                return jinja2.render('site_values_txt.html', request, headers=headers, status=200, **station)
 
     @ns.doc('put_station', params=OrderedDict([
         ("name", {"description": "Station Name",
