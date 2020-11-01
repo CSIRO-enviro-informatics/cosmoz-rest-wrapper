@@ -99,6 +99,7 @@ async def get_station_mongo(station_number, params, json_safe=True, jinja_safe=F
     all_stations_collection = db.all_stations
     s = await mongo_client.start_session()
     try:
+        count = await all_stations_collection.count_documents({})
         row = await all_stations_collection.find_one({'site_no': station_number}, projection=select_filter, session=s)
     finally:
         await s.end_session()
@@ -124,7 +125,14 @@ async def get_station_mongo(station_number, params, json_safe=True, jinja_safe=F
             elif json_safe == "orjson":  # orjson can't do decimal
                 g = float(g)  # converting to float is fine because Javascript numbers are native double-float anyway.
             resp[r] = g
+    if json_safe and 'id' not in resp and 'site_no' in resp:
+        resp['id'] = resp['site_no']
+    resp = {
+        'meta': {'total': count, },
+        'station': resp,
+    }
     return resp
+
 
 async def get_station_calibration_mongo(station_number, params, json_safe=True, jinja_safe=False):
     mongo_client = get_mongo_client()
@@ -150,6 +158,7 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True, 
     stations_calibration_collection = db.stations_calibration
     s = await mongo_client.start_session()
     try:
+        total = await stations_calibration_collection.count_documents({'site_no': station_number})
         cursor = stations_calibration_collection.find({'site_no': station_number}, projection=select_filter)
         if cursor is None:
             raise LookupError("Cannot find site calibration.")
@@ -181,6 +190,7 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True, 
     count = len(responses)
     resp = {
         'meta': {
+            'total': total,
             'count': count,
             'offset': 0,
         },
@@ -213,6 +223,7 @@ async def get_stations_mongo(params, json_safe=True, jinja_safe=False):
     all_stations_collection = db.all_stations
     s = await mongo_client.start_session()
     try:
+        total_stations = await all_stations_collection.count_documents({})
         all_stations_cur = all_stations_collection.find({}, projection=select_filter, skip=offset, limit=count, session=s)
         if all_stations_cur is None:
             raise LookupError("Cannot find any sites.")
@@ -240,12 +251,15 @@ async def get_stations_mongo(params, json_safe=True, jinja_safe=False):
             if select_filter is None or select_filter.get('_id', False) is False:
                 if '_id' in station:
                     del station['_id']
+            if json_safe and 'id' not in station and 'site_no' in station:
+                station['id'] = station['site_no']
             stations.append(station)
             count += 1
     finally:
         await s.end_session()
     resp = {
         'meta': {
+            'total': total_stations,
             'count': count,
             'offset': offset,
         },
