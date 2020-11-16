@@ -2,6 +2,7 @@ from functools import wraps
 from sanic_httpauth import HTTPTokenAuth, get_request
 import asyncio
 from oauth2_routes import get_profile
+import functions
 
 #token_auth is defined below... python needs predeclaration of classes (hrmph)
 
@@ -64,10 +65,25 @@ async def verify_token(token):
     # could be an API_KEY in future, or we could have another HTTPTokenAuthWithUser for api_key headers
     profile = await get_profile(None, token)
 
-    if profile:
+    if profile and await is_admin(profile['id']):
         return {
             "id": profile['id'],
             "displayName": profile['displayName'],
             "email": profile['email']
             # "apiKey": ...
         }
+
+async def is_admin(ident):
+    #hard codes
+    if ident.lower() in ['sea066', 'som05d', 'mcj002', 'ste652']:
+        return True
+
+    #else check the DB
+    mongo_client = functions.get_mongo_client()
+    db = mongo_client.cosmoz
+    users = db.users
+    user = await users.find_one({'ident': ident, 'role': 'admin'})    
+    if user:
+        return True
+    return False
+
