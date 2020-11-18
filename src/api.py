@@ -28,6 +28,9 @@ from config import TRUTHS
 from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
 from util import PY_36, datetime_from_iso
 from auth_functions import token_auth
+from models import StationSchema
+from json_api_helpers import format_errors
+from marshmallow import ValidationError
 
 orjson_option = OPT_NAIVE_UTC | OPT_UTC_Z
 
@@ -177,8 +180,19 @@ class Stations(Resource):
     ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
     async def post(self, request, *args, **kwargs):
         '''Add new cosmoz station.'''
-        #Generates station number
-        return text("OK")
+        # if not request.json.station:
+        #     text(None, status, 400)
+        # new_station = request.json["station"]
+
+        try:
+            cleaned = StationSchema().load(request.json['station'])
+        except ValidationError as err:
+            print(err.messages)
+            payload = format_errors(StationSchema(), err.messages, False)
+            print(payload)
+            return json(payload, status=422)
+
+        return text('ok')
 
 @ns.route('/stations/<station_no>')
 @ns.param('station_no', "Station Number", type="number", format="integer")
