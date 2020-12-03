@@ -28,7 +28,10 @@ from orjson import dumps as fast_dumps, OPT_NAIVE_UTC, OPT_UTC_Z
 
 import config
 from config import TRUTHS
-from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
+from functions import get_observations_influx, get_station_mongo,\
+    get_stations_mongo, get_station_calibration_mongo,\
+    get_last_observations_influx, is_unique_val, insert,\
+    STATION_COLLECTION
 from util import PY_36, datetime_from_iso
 from auth_functions import token_auth
 from models import StationSchema
@@ -183,19 +186,23 @@ class Stations(Resource):
     ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
     async def post(self, request, *args, **kwargs):
         '''Add new cosmoz station.'''
-        # if not request.json.station:
-        #     text(None, status, 400)
-        # new_station = request.json["station"]
+        if not "station" in request.json:
+            text(None, status=400)
 
         try:
-            cleaned = StationSchema().load(request.json['station'])
+            cleaned = StationSchema().load(request.json["station"])            
+            if 'site_no' in cleaned and not await is_unique_val(STATION_COLLECTION, 'site_no', cleaned['site_no']):
+                raise ValidationError({'site_no': ["Value already in use"]})
         except ValidationError as err:
-            print(err.messages)
-            payload = format_errors(StationSchema(), err.messages, False)
-            print(payload)
+            errors = err.messages
+            payload = format_errors(StationSchema(), errors, False)
             return json(payload, status=422)
+            
+        id = await insert(STATION_COLLECTION, cleaned)
 
-        return text('ok')
+        response_dict = StationSchema().dump(cleaned)
+
+        return json(response_dict)
 
 @ns.route('/stations/<station_no>')
 @ns.param('station_no', "Station Number", type="number", format="integer")

@@ -8,6 +8,8 @@ from motor.motor_asyncio import AsyncIOMotorClient as MotorClient
 import config
 from util import datetime_to_iso, datetime_from_iso, datetime_to_date_string
 
+STATION_COLLECTION = 'all_stations'
+
 persistent_clients = {
     'influx_client': None,
     'mongo_client': None
@@ -96,7 +98,7 @@ async def get_station_mongo(station_number, params, json_safe=True, jinja_safe=F
     else:
         select_filter = None
     db = mongo_client.cosmoz
-    all_stations_collection = db.all_stations
+    all_stations_collection = db[STATION_COLLECTION]
     s = await mongo_client.start_session()
     try:
         count = await all_stations_collection.count_documents({})
@@ -220,7 +222,7 @@ async def get_stations_mongo(params, json_safe=True, jinja_safe=False):
         select_filter = None
 
     db = mongo_client.cosmoz
-    all_stations_collection = db.all_stations
+    all_stations_collection = db[STATION_COLLECTION]
     s = await mongo_client.start_session()
     try:
         total_stations = await all_stations_collection.count_documents({})
@@ -426,5 +428,22 @@ def get_observations_influx(site_number, params, json_safe=True, excel_safe=Fals
     if aggregate:
         resp['meta']['aggregation'] = str(aggregate)
     return resp
+
+async def is_unique_val(collection, field, val):
+    mongo_client = get_mongo_client()
+    db = mongo_client.cosmoz
+    c = db[collection]
+    query = {}
+    query[field] = val
+    result = await c.find_one(query)
+    return not result
+    
+async def insert(collection, val): 
+    mongo_client = get_mongo_client()
+    db = mongo_client.cosmoz
+    c = db[collection]
+    result = await c.insert_one(val)
+    return result.inserted_id
+
 
 
