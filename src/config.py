@@ -3,10 +3,12 @@
 import sys
 from util import load_env
 from os import getenv
+import pathlib
 load_env()
 module = sys.modules[__name__]
 TRUTHS = {True, 1, '1', 'T', 't', 'true', 'TRUE', 'True'}
 CONFIG = module.CONFIG = {}
+default_image_path = str(pathlib.Path(pathlib.Path(__file__).parent.absolute(), 'static/images'))
 
 OVERRIDE_SERVER_NAME = CONFIG['OVERRIDE_SERVER_NAME'] = getenv("SANIC_OVERRIDE_SERVER_NAME", "localhost:9001")
 PROXY_ROUTE_BASE = CONFIG['PROXY_ROUTE_BASE'] = getenv("SANIC_PROXY_ROUTE_BASE", "")
@@ -18,3 +20,4 @@ MONGODB_PORT = CONFIG['MONGODB_PORT'] = int(getenv("MONGODB_PORT", 27017))
 METRICS_DIRECTORY = CONFIG['METRICS_DIRECTORY'] = getenv("METRICS_DIRECTORY", ".")
 DEBUG = CONFIG['DEBUG'] = getenv("SANIC_DEBUG", '') in TRUTHS
 AUTO_RELOAD = CONFIG['AUTO_RELOAD'] = getenv("SANIC_AUTO_RELOAD", '') in TRUTHS
+UPLOAD_DIR = CONFIG['UPLOAD_DIR'] = getenv("UPLOAD_DIR", default_image_path)
