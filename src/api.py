@@ -14,8 +14,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+import os
 from collections import OrderedDict
 import datetime
+import aiofiles
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlsplit
 from sanic_restplus import Api, Resource, fields
@@ -24,6 +26,7 @@ from sanic.exceptions import ServiceUnavailable
 from sanic_jinja2_spf import sanic_jinja2
 from orjson import dumps as fast_dumps, OPT_NAIVE_UTC, OPT_UTC_Z
 
+import config
 from config import TRUTHS
 from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
 from util import PY_36, datetime_from_iso
@@ -693,3 +696,27 @@ class Users(Resource):
             return {
                 'user': user,
             }
+
+    
+@ns.route("/images")
+class Images(Resource):
+    async def post(self, request):
+        print(f"CONFIG PATH FOR IMAGE: {config.UPLOAD_DIR}")
+        if not os.path.exists(config.UPLOAD_DIR):
+            os.makedirs(config.UPLOAD_DIR)
+
+        # Ensure a file was sent
+        upload_file = request.files.get('file')
+        if not upload_file:
+            return json({"error": "Missing file"}, status=400)
+
+        file_path = f"{config.UPLOAD_DIR}/{upload_file.name}"
+
+        await self.write_file(file_path, upload_file.body)
+
+        return json({'result': 'ok'})
+
+    async def write_file(self, path, body):
+        async with aiofiles.open(path, 'wb') as f:
+            await f.write(body)
+        f.close() 
