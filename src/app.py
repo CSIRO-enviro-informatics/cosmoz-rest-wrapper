@@ -74,6 +74,9 @@ app.static(uri="/static/material_swagger.css", file_or_directory=file_loc,
            name="material_swagger")
 restplus.register_api(restplus_reg, api)
 
+app.static('/static/images', config.UPLOAD_DIR)
+
+
 APIKEY_USE_OAUTH2 = False  # if False, use Oauth 1.0a
 
 @ctx.route("/apikey", methods=["GET", "POST", "HEAD", "OPTIONS"])
