@@ -18,6 +18,7 @@ import os
 from collections import OrderedDict
 import datetime
 import aiofiles
+from sanic import response
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlsplit
 from sanic_restplus import Api, Resource, fields
@@ -30,6 +31,7 @@ import config
 from config import TRUTHS
 from functions import get_observations_influx, get_station_mongo,\
     get_stations_mongo, get_station_calibration_mongo,\
+    insert_file_stream, write_file_to_stream,\
     get_last_observations_influx, is_unique_val, insert,\
     STATION_COLLECTION
 from util import PY_36, datetime_from_iso
@@ -706,20 +708,21 @@ class Users(Resource):
 
     
 @ns.route("/images")
-class Images(Resource):
+class ImageUpload(Resource):
     async def post(self, request):
-        print(f"CONFIG PATH FOR IMAGE: {config.UPLOAD_DIR}")
-        if not os.path.exists(config.UPLOAD_DIR):
-            os.makedirs(config.UPLOAD_DIR)
+        # print(f"CONFIG PATH FOR IMAGE: {config.UPLOAD_DIR}")
+        # if not os.path.exists(config.UPLOAD_DIR):
+        #     os.makedirs(config.UPLOAD_DIR)
 
         # Ensure a file was sent
         upload_file = request.files.get('file')
         if not upload_file:
             return json({"error": "Missing file"}, status=400)
 
-        file_path = f"{config.UPLOAD_DIR}/{upload_file.name}"
+        # file_path = f"{config.UPLOAD_DIR}/{upload_file.name}"
 
-        await self.write_file(file_path, upload_file.body)
+        # await self.write_file(file_path, upload_file.body)
+        file_id = await insert_file_stream(upload_file.name, upload_file.body)
 
         return json({'result': 'ok'})
 
@@ -727,3 +730,21 @@ class Images(Resource):
         async with aiofiles.open(path, 'wb') as f:
             await f.write(body)
         f.close() 
+
+@ns.route("/images/<filename>")
+@ns.param('filename', "Image Filename", type="string", format="string")
+class ImageDownload(Resource):
+    async def get(self, request, *args, filename=None):
+        if filename == None:
+            return json({'error': 'Missing file name'}, status=404)
+
+        # file_path = f"{config.UPLOAD_DIR}/{filename}"
+        # if not os.path.isfile(file_path):
+        #     return json({'error': f"{filename} can't be found"}, status=404)
+
+        async def download_fn(response):
+            await write_file_to_stream(filename, response)
+
+        return response.stream(download_fn)
+        # return await response.file_stream(file_path)
+

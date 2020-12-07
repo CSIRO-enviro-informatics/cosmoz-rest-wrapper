@@ -1,10 +1,11 @@
+from pathlib import Path
 import asyncio
 import datetime
 from collections import OrderedDict
 
 import bson
 from influxdb import InfluxDBClient
-from motor.motor_asyncio import AsyncIOMotorClient as MotorClient
+from motor.motor_asyncio import AsyncIOMotorClient as MotorClient, AsyncIOMotorGridFSBucket
 import config
 from util import datetime_to_iso, datetime_from_iso, datetime_to_date_string
 
@@ -445,5 +446,34 @@ async def insert(collection, val):
     result = await c.insert_one(val)
     return result.inserted_id
 
+async def insert_file_stream(filename, stream): 
+    mongo_client = get_mongo_client()
+    db = mongo_client.cosmoz
+    gfs = AsyncIOMotorGridFSBucket(db)
+    file_id = await gfs.upload_from_stream(
+        filename, 
+        stream, 
+        # metadata={"contentType": "text/plain"}
+        )
 
+    return file_id
 
+async def write_file_to_stream(filename, async_stream): 
+    mongo_client = get_mongo_client()
+    db = mongo_client.cosmoz
+    gfs = AsyncIOMotorGridFSBucket(db)
+    grid_out = await gfs.open_download_stream_by_name(filename)
+    while True:
+        chunk = await grid_out.readchunk()
+        if not chunk:
+            break
+        await async_stream.write(chunk)
+    
+async def load_default_images():
+    file_dir = Path('./static/images')
+    for p in file_dir.iterdir():
+        path = p.resolve()
+        print(f"Adding the image '{path}' to the database")
+        if not path.name.startswith('.'):
+            with open(path, mode="rb") as f:
+                await insert_file_stream(p.name, f)        

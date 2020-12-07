@@ -21,7 +21,7 @@ from os import putenv, getenv
 from urllib.parse import quote_plus
 from sanic.exceptions import Unauthorized
 from sanic.response import HTTPResponse, text, redirect
-from sanic import Sanic
+from sanic import Sanic, response
 from sanic.request import Request
 from spf import SanicPluginsFramework
 from spf.plugins.contextualize import contextualize
@@ -31,6 +31,7 @@ from sanic_jinja2_spf import sanic_jinja2
 from sanic_metrics import sanic_metrics
 from jinja2 import FileSystemLoader
 import config
+import functions
 
 HERE_DIR = os.path.dirname(__file__)
 if HERE_DIR not in sys.path:
@@ -73,9 +74,6 @@ file_loc = os.path.abspath(os.path.join(HERE_DIR, "static/material_swagger.css")
 app.static(uri="/static/material_swagger.css", file_or_directory=file_loc,
            name="material_swagger")
 restplus.register_api(restplus_reg, api)
-
-app.static('/static/images', config.UPLOAD_DIR)
-
 
 APIKEY_USE_OAUTH2 = False  # if False, use Oauth 1.0a
 
@@ -188,6 +186,10 @@ async def checkaccesskey(request, api_key):
             raise Unauthorized("API Key is not valid but does not work. Perhaps the OAuth access key has been revoked.")
     return HTTPResponse(message, 200)
 
+@app.route("/load_default_images")
+async def load_default_images(request):
+    await functions.load_default_images()
+    return response.json({'result': 'ok'})
 
 if __name__ == "__main__":
     server_name = OVERRIDE_SERVER_NAME or "localhost:9001"
