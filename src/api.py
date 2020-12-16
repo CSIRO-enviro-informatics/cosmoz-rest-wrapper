@@ -273,8 +273,8 @@ class Station(Resource):
             raise RuntimeError("station_no is mandatory.")
         return text("OK")
 
-@ns.route('/stations/<station_no>/calibration')
-@ns.param('station_no', "Station Number", type="number", format="integer")
+@ns.route('/calibrations')
+@ns.param('station_no', "Station Number", type="number", format="integer", _in="query")
 @ns.response(404, 'Station Calibration not found')
 class StationCalibration(Resource):
     accept_types = ["application/json", "text/csv", "text/plain"]
@@ -287,8 +287,9 @@ class StationCalibration(Resource):
             "required": False, "type": "string", "format": "text"}),
     ]))
     @ns.produces(accept_types)
-    async def get(self, request, *args, station_no=None, **kwargs):
+    async def get(self, request, *args, **kwargs):
         '''Get cosmoz station calibrations.'''
+        station_no = request.args.get('station_no', None)
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         station_no = int(station_no)
@@ -332,50 +333,6 @@ class StationCalibration(Resource):
             return await jinja2.render_async(template, request, headers=headers, **res)
         else:
             return jinja2.render(template, request, headers=headers, **res)
-
-    @ns.doc('put_station_cal', params=OrderedDict([
-        ("name", {"description": "Station Name",
-          "required": True, "type": "string", "format": "text"}),
-    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
-    @ns.produces(accept_types)
-    async def put(self, request, *args, station_no=None, **kwargs):
-        '''Add cosmoz station calibration with station_no.'''
-        if station_no is None:
-            raise RuntimeError("station_no is mandatory.")
-        return text("OK")
-
-
-    @ns.doc('put_station', params=OrderedDict([
-        ("name", {"description": "Station Name",
-          "required": True, "type": "string", "format": "text"}),
-        ("latitude", {"description": "Latitude (in decimal degrees)",
-                  "required": True, "type": "string", "format": "number"}),
-        ("longitude", {"description": "Longitude (in decimal degrees)",
-                      "required": True, "type": "string", "format": "number"}),
-    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
-    @ns.produces(accept_types)
-    async def put(self, request, *args, station_no=None, **kwargs):
-        '''Add cosmoz station.'''
-        # Station number is _not_ generated.
-        if station_no is None:
-            raise RuntimeError("station_no is mandatory.")
-        return text("OK")
-
-    @ns.doc('patch_station', params=OrderedDict([
-        ("name", {"description": "Station Name",
-          "required": True, "type": "string", "format": "text"}),
-        ("latitude", {"description": "Latitude (in decimal degrees)",
-                  "required": True, "type": "string", "format": "number"}),
-        ("longitude", {"description": "Longitude (in decimal degrees)",
-                      "required": True, "type": "string", "format": "number"}),
-    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
-    @ns.produces(accept_types)
-    async def patch(self, request, *args, station_no=None, **kwargs):
-        '''Update cosmoz station.'''
-        # Station number is required
-        if station_no is None:
-            raise RuntimeError("station_no is mandatory.")
-        return text("OK")
 
 
 @ns.route('/stations/<station_no>/observations')
