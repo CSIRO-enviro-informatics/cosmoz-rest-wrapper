@@ -150,13 +150,11 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True, 
             if "site_no" not in select_filter:
                 select_filter['site_no'] = True
             select_filter.move_to_end('site_no', last=False)
-            if "_id" not in select_filter:
-                select_filter['_id'] = False
+            select_filter['_id'] = True
             select_filter.move_to_end('_id', last=False)
     else:
         select_filter = None
-    if select_filter is None:
-        select_filter = {'_id': False}
+
     db = mongo_client.cosmoz
     stations_calibration_collection = db.stations_calibration
     s = await mongo_client.start_session()
@@ -173,7 +171,8 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True, 
         while (await cursor.fetch_next):
             resp = cursor.next_object()
             if "_id" in resp:
-                del resp['id']
+                resp['id'] = str(resp['_id'])
+                del resp['_id']
             for r, v in resp.items():
                 if isinstance(v, datetime.datetime):
                     if (json_safe and json_safe != "orjson") or jinja_safe: # orjson can handle native datetimes
