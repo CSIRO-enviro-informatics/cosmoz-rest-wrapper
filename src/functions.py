@@ -4,6 +4,7 @@ import datetime
 from collections import OrderedDict
 
 import bson
+from bson.objectid import ObjectId
 from influxdb import InfluxDBClient
 from motor.motor_asyncio import AsyncIOMotorClient as MotorClient, AsyncIOMotorGridFSBucket
 import config
@@ -80,62 +81,88 @@ station_variable_to_column_map = {
 
 station_column_to_variable_map = { v: k for k,v in station_variable_to_column_map.items() }
 
-async def get_station_mongo(station_number, params, json_safe=True, jinja_safe=False):
+def props_to_projection(prop_list, required_list=[]):
+    select_filter = OrderedDict()
+
+    if prop_list and len(prop_list) > 0 and '*' not in prop_list:
+        select_filter = OrderedDict({v: True for v in required_list}) 
+        select_filter.update(OrderedDict({v: True for v in prop_list}))            
+
+    #explicitly remove the id if not mentioned
+    if not (prop_list and "_id" in prop_list) and "_id" not in required_list:
+        select_filter['_id'] = False
+    
+    if "_id" in select_filter:
+        select_filter.move_to_end('_id', last=False)
+
+    if len(select_filter) == 0:
+        return None
+        
+    return select_filter     
+
+async def get_record(col_name, query, projection):
     mongo_client = get_mongo_client()
-    station_number = int(station_number)
-    params = params or {}
-    property_filter = params.get('property_filter', [])
-    if property_filter and len(property_filter) > 0:
-        if '*' in property_filter:
-            select_filter = None
-        else:
-            select_filter = OrderedDict({v: True for v in property_filter})
-            if "site_no" not in select_filter:
-                select_filter['site_no'] = True
-            select_filter.move_to_end('site_no', last=False)
-            if "_id" not in select_filter:
-                select_filter['_id'] = False
-            select_filter.move_to_end('_id', last=False)
-    else:
-        select_filter = None
     db = mongo_client.cosmoz
-    all_stations_collection = db[STATION_COLLECTION]
+    col = db[col_name]
     s = await mongo_client.start_session()
     try:
-        count = await all_stations_collection.count_documents({})
-        row = await all_stations_collection.find_one({'site_no': station_number}, projection=select_filter, session=s)
+        count = await col.count_documents({})
+        row = await col.find_one(query, projection=projection, session=s)
     finally:
         await s.end_session()
     if row is None or len(row) < 1:
-        raise LookupError("Cannot find site.")
-    resp = row
-    #resp = { station_column_to_variable_map[c]: v for c,v in row.items() if c in station_column_to_variable_map.keys() }
-    if select_filter is None or select_filter.get('_id', False) is False:
-        if '_id' in resp:
-            del resp['_id']
-    if jinja_safe and 'status' in resp:
-        resp['_status'] = resp['status']
-        del resp['status']
-    for r, v in resp.items():
+        raise LookupError("Cannot find record.")
+    print("ROW ********")
+    print(dict(row))
+
+    return count, row
+
+def clean_record(record, json_safe=True, jinja_safe=True):
+    if jinja_safe and 'status' in record:
+        record['_status'] = record['status']
+        del record['status']
+    for r, v in record.items():
         if isinstance(v, datetime.datetime):
             if (json_safe and json_safe != "orjson") or jinja_safe:  # orjson can handle native datetimes
                 v = datetime_to_iso(v)
-            resp[r] = v
+            record[r] = v
         elif isinstance(v, bson.decimal128.Decimal128):
             g = v.to_decimal()
             if json_safe and g.is_nan():
                 g = 'NaN'
             elif json_safe == "orjson":  # orjson can't do decimal
                 g = float(g)  # converting to float is fine because Javascript numbers are native double-float anyway.
-            resp[r] = g
-    if json_safe and 'id' not in resp and 'site_no' in resp:
-        resp['id'] = resp['site_no']
-    resp = {
-        'meta': {'total': count, },
-        'station': resp,
-    }
-    return resp
+            record[r] = g
 
+async def get_station_mongo(station_number, params={}, json_safe=True, jinja_safe=False):
+    station_number = int(station_number)
+    property_filter = params.get('property_filter', [])  
+    select_filter = props_to_projection(property_filter, ['site_no'])
+    
+    total, record = await get_record(STATION_COLLECTION, {'site_no': station_number}, select_filter)
+    clean_record(record, json_safe, jinja_safe)
+
+    #make the response id the site_no so ember has an 'id'
+    record['id'] = record['site_no']
+    return {
+        'meta': { 'total': total },
+        'station': record,
+    }
+
+async def get_calibration_mongo(c_id, params={}, json_safe=True, jinja_safe=False):
+    property_filter = params.get('property_filter', [])  
+    select_filter = props_to_projection(property_filter, ['_id'])
+    
+    total, record = await get_record('stations_calibration', {'_id': ObjectId(c_id)}, select_filter)
+    clean_record(record, json_safe, jinja_safe)
+
+    record['id'] = str(record['_id'])
+    del record['_id']
+
+    return {
+        'meta': { 'total': total },
+        'calibration': record,
+    }
 
 async def get_station_calibration_mongo(station_number, params, json_safe=True, jinja_safe=False):
     mongo_client = get_mongo_client()
@@ -199,7 +226,6 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True, 
         'calibrations': responses,
     }
     return resp
-
 
 async def get_stations_mongo(params, json_safe=True, jinja_safe=False):
     mongo_client = get_mongo_client()

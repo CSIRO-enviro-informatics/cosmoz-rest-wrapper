@@ -23,9 +23,10 @@ from datetime import datetime, timezone, timedelta
 from urllib.parse import urlsplit
 from sanic_restplus import Api, Resource, fields
 from sanic.response import json, text, stream, HTTPResponse
-from sanic.exceptions import ServiceUnavailable
+from sanic.exceptions import ServiceUnavailable, MethodNotSupported
 from sanic_jinja2_spf import sanic_jinja2
 from orjson import dumps as fast_dumps, OPT_NAIVE_UTC, OPT_UTC_Z
+from functools import partial
 
 import config
 from config import TRUTHS
@@ -33,7 +34,7 @@ from functions import get_observations_influx, get_station_mongo,\
     get_stations_mongo, get_station_calibration_mongo,\
     insert_file_stream, write_file_to_stream,\
     get_last_observations_influx, is_unique_val, insert,\
-    STATION_COLLECTION
+    get_calibration_mongo, STATION_COLLECTION
 from util import PY_36, datetime_from_iso
 from auth_functions import token_auth
 from models import StationSchema
@@ -79,7 +80,6 @@ def get_jinja2_for_api(_a):
     reg = sanic_jinja2.find_plugin_registration(s)
     assoc = sanic_jinja2.AssociatedTuple(sanic_jinja2, reg)
     return assoc
-
 
 def get_accept_mediatypes_in_order(request):
     """
@@ -139,6 +139,62 @@ def match_accept_mediatypes_to_provides(request, provides):
                 if j.endswith(check_for):
                     return j
     return None
+
+def get_response_type(request, provides):
+    return_type = match_accept_mediatypes_to_provides(request, provides)
+
+    format = request.args.getlist('format', None)
+    if not format:
+        format = request.args.getlist('_format', None)
+    if format:
+        format = next(iter(format))
+        if format in provides:
+            return_type = format
+
+    return return_type
+
+async def create_response(request, content, response_type, api, template_map={}):
+    if response_type == "application/json":
+        return HTTPResponse(None, status=200, content_type=response_type, body_bytes=fast_dumps(content, option=orjson_option))
+
+    headers = {'Content-Type': response_type}
+    jinja2 = get_jinja2_for_api(api)
+    if response_type in template_map:
+        template = template_map[response_type]
+    else:
+        raise NotImplementedError("Cannot determine template name to use for response type.")
+    if PY_36:
+        return await jinja2.render_async(template, request, headers=headers, **content)
+    else:
+        return jinja2.render(template, request, headers=headers, **content)
+
+async def get_obj_reponse(request, response_types, async_partial_func, api, template_map={}):
+    response_type = get_response_type(request, response_types)
+
+    if response_type is None:
+        raise MethodNotSupported("Please use a valid accept type.")
+
+    if response_type == "application/json":
+        property_filter = request.args.getlist('property_filter', None)
+        if property_filter:
+            property_filter = str(next(iter(property_filter))).split(',')
+            property_filter = [p for p in property_filter if len(p)]
+    else:
+        # CSV and TXT get all properties, regardless of property_filter, as it might break templates
+        property_filter = "*"
+
+    obs_params = {
+        "property_filter": property_filter,
+    }
+
+    json_safe = 'orjson' if response_type == "application/json" else False
+    jinja_safe = 'txt' if response_type == "text/plain" else False
+    jinja_safe = 'csv' if response_type == "text/csv" else jinja_safe
+    
+    result = await async_partial_func(params=obs_params, json_safe=json_safe, jinja_safe=jinja_safe)
+
+    return await create_response(request, result, response_type, api, template_map)
+
 
 @ns.route('/stations')
 class Stations(Resource):
@@ -224,43 +280,12 @@ class Station(Resource):
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         station_no = int(station_no)
-        return_type = match_accept_mediatypes_to_provides(request, self.accept_types)
-        format = request.args.getlist('format', None)
-        if not format:
-            format = request.args.getlist('_format', None)
-        if format:
-            format = next(iter(format))
-            if format in self.accept_types:
-                return_type = format
-        if return_type is None:
-            return ServiceUnavailable("Please use a valid accept type.")
-        if return_type == "application/json":
-            property_filter = request.args.getlist('property_filter', None)
-            if property_filter:
-                property_filter = str(next(iter(property_filter))).split(',')
-                property_filter = [p for p in property_filter if len(p)]
-        else:
-            # CSV and TXT get all properties, regardless of property_filter
-            property_filter = "*"
-        obs_params = {
-            "property_filter": property_filter,
-        }
-        json_safe = 'orjson' if return_type == "application/json" else False
-        jinja_safe = 'txt' if return_type == "text/plain" else False
-        res = await get_station_mongo(station_no, obs_params, json_safe=json_safe, jinja_safe=jinja_safe)
-        if return_type == "application/json":
-            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
-        elif return_type == "application/csv":
-            raise NotImplementedError()
-            #return build_csv(res)
-        elif return_type == "text/plain":
-            headers = {'Content-Type': return_type}
-            jinja2 = get_jinja2_for_api(self.api)
-            station = res['station']
-            if PY_36:
-                return await jinja2.render_async('site_values_txt.html', request, headers=headers, status=200, **station)
-            else:
-                return jinja2.render('site_values_txt.html', request, headers=headers, status=200, **station)
+        get_station_func = partial(get_station_mongo, station_no)
+
+        return await get_obj_reponse(request, self.accept_types, get_station_func, self.api, {
+            "text/plain": 'site_values_txt.html'
+        })
+
 
     @ns.doc('put_station', params=OrderedDict([
         ("name", {"description": "Station Name",
@@ -275,8 +300,8 @@ class Station(Resource):
 
 @ns.route('/calibrations')
 @ns.param('station_no', "Station Number", type="number", format="integer", _in="query")
-@ns.response(404, 'Station Calibration not found')
-class StationCalibration(Resource):
+@ns.response(404, 'Calibrations not found')
+class Calibrations(Resource):
     accept_types = ["application/json", "text/csv", "text/plain"]
     '''Gets site date for station_no.'''
 
@@ -333,6 +358,31 @@ class StationCalibration(Resource):
             return await jinja2.render_async(template, request, headers=headers, **res)
         else:
             return jinja2.render(template, request, headers=headers, **res)
+
+@ns.route('/calibration/<c_id>')
+@ns.param('c_id', "Calibration ID", type="string")
+@ns.response(404, 'Calibration not found')
+class Calibration(Resource):
+    accept_types = ["application/json", "text/csv", "text/plain"]
+
+    @ns.doc('get_calibration', params=OrderedDict([
+        ("property_filter", {
+            "description": "Comma delimited list of properties to retrieve.\n\n"
+                           "_Enter * for all_.",
+            "required": False, "type": "string", "format": "text"}),
+    ]))
+    @ns.produces(accept_types)
+    async def get(self, request, *args, c_id=None, **kwargs):
+        '''Get cosmoz station calibrations.'''
+        if c_id is None:
+            raise RuntimeError("id is mandatory.")
+
+        get_calibration_func = partial(get_calibration_mongo, c_id)
+
+        return await get_obj_reponse(request, self.accept_types, get_calibration_func, self.api, {
+            "text/csv": 'site_data_cal_csv_single.html', 
+            "text/plain": 'site_data_cal_txt_single.html'
+        })
 
 
 @ns.route('/stations/<station_no>/observations')

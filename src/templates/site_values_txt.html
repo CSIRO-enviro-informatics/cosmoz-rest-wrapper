@@ -1,27 +1,27 @@
-{{site_name}} Values {%if calibration_type == "V" %}(Sensor has been calibrated.){% else %}(Warning: This sensor has not been calibrated!){% endif %}
+{{station.site_name}} Values {%if station.calibration_type == "V" %}(Sensor has been calibrated.){% else %}(Warning: This sensor has not been calibrated!){% endif %}
 
 
-{{"Latitude".rjust(35)}} {{ "%19.3f"|format(latitude) }}
-{{"Longitude".rjust(35)}} {{ "%19.3f"|format(longitude) }}
-{{"Altitude".rjust(35)}} {{ "%19.3f"|format(altitude) }} m
-{{"Installation Date".rjust(35)}} {{ (installation_date|truncate(10, end="")).rjust(19) }}
-{{"Timezone".rjust(35)}} {{ (timezone|trim).rjust(19) }}
-{{"Dose Site".rjust(35)}} {{ nmdb.rjust(19) }}
-{{"Lattice Water".rjust(35)}} {{ "%19.3f"|format(lattice_water_g_g) }} g water / g soil
-{{"Soil Organic Matter".rjust(35)}} {{ "%19.3f"|format(soil_organic_matter_g_g) }} g water / g soil
-{{"Average Bulk Density".rjust(35)}} {{ "%19.3f"|format(bulk_density) }} g cm^-3
-{{"Cut-Off Rigidity".rjust(35)}} {{ "%19.3f"|format(cutoff_rigidity) }} GV
-{{"Average N0".rjust(35)}} {{ "%19.3f"|format(n0_cal) }} c h^-1
-{{"Reference Pressure".rjust(35)}} {{ "%19.3f"|format(ref_pressure) }} mb
-{{"Intensity Reference Value".rjust(35)}} {{ "%19.3f"|format(ref_intensity) }} c h^-1
+{{"Latitude".rjust(35)}} {{ "%19.3f"|format(station.latitude) }}
+{{"Longitude".rjust(35)}} {{ "%19.3f"|format(station.longitude) }}
+{{"Altitude".rjust(35)}} {{ "%19.3f"|format(station.altitude) }} m
+{{"Installation Date".rjust(35)}} {{ (station.installation_date|truncate(10, end="")).rjust(19) }}
+{{"Timezone".rjust(35)}} {{ (station.timezone|trim).rjust(19) }}
+{{"Dose Site".rjust(35)}} {{ station.nmdb.rjust(19) }}
+{{"Lattice Water".rjust(35)}} {{ "%19.3f"|format(station.lattice_water_g_g) }} g water / g soil
+{{"Soil Organic Matter".rjust(35)}} {{ "%19.3f"|format(station.soil_organic_matter_g_g) }} g water / g soil
+{{"Average Bulk Density".rjust(35)}} {{ "%19.3f"|format(station.bulk_density) }} g cm^-3
+{{"Cut-Off Rigidity".rjust(35)}} {{ "%19.3f"|format(station.cutoff_rigidity) }} GV
+{{"Average N0".rjust(35)}} {{ "%19.3f"|format(station.n0_cal) }} c h^-1
+{{"Reference Pressure".rjust(35)}} {{ "%19.3f"|format(station.ref_pressure) }} mb
+{{"Intensity Reference Value".rjust(35)}} {{ "%19.3f"|format(station.ref_intensity) }} c h^-1
 {{"Vapor Reference Value".rjust(35)}} {{ "%19.3f"|format(0.0) }} g m^-3
-{{"Atmospheric Depth".rjust(35)}} {{ "%19.3f"|format((ref_pressure|float)/0.981) }} g cm^-2
+{{"Atmospheric Depth".rjust(35)}} {{ "%19.3f"|format((station.ref_pressure|float)/0.981) }} g cm^-2
 {{"Atmospheric Attentuation Coeffcient".rjust(35)}} {{ "0.008".rjust(19) }} mb^-1
 {{"Sea Level Reference Pressure".rjust(35)}} {{ "%19.3f"|format(1013.25) }} mb
 {{"Sea Level Atmospheric Depth".rjust(35)}} {{ "%19.3f"|format(1013.25/0.981) }} g cm^-2
 {{"Sea Level Atmsospheric Attenuation".rjust(35)}} {{ "0.007".rjust(19) }} mb^-1
-{{"Elevation Scale".rjust(35)}} {{ "%19.3f"|format(elev_scaling) }}
-{{"Latitude Scale".rjust(35)}} {{ "%19.3f"|format(latit_scaling) }}
+{{"Elevation Scale".rjust(35)}} {{ "%19.3f"|format(station.elev_scaling) }}
+{{"Latitude Scale".rjust(35)}} {{ "%19.3f"|format(station.latit_scaling) }}
 
 
 Notes
