@@ -33,11 +33,11 @@ from config import TRUTHS
 from functions import get_observations_influx, get_station_mongo,\
     get_stations_mongo, get_station_calibration_mongo,\
     insert_file_stream, write_file_to_stream,\
-    get_last_observations_influx, is_unique_val, insert,\
-    get_calibration_mongo, STATION_COLLECTION
+    get_last_observations_influx, is_unique_val, insert, update,\
+    get_calibration_mongo, STATION_COLLECTION, CALIBRATION_COLLECTION
 from util import PY_36, datetime_from_iso
 from auth_functions import token_auth
-from models import StationSchema
+from models import StationSchema, CalibrationSchema
 from json_api_helpers import format_errors
 from marshmallow import ValidationError
 
@@ -195,6 +195,17 @@ async def get_obj_reponse(request, response_types, async_partial_func, api, temp
 
     return await create_response(request, result, response_type, api, template_map)
 
+async def generic_put_request(collection, selector, raw_doc, schema_cls):
+    try:
+        cleaned = schema_cls().load(raw_doc)            
+    except ValidationError as err:
+        errors = err.messages
+        payload = format_errors(schema_cls(), errors, False)
+        return json(payload, status=422)
+    
+    await update(collection, selector, cleaned)
+    response_dict = schema_cls().dump(cleaned)
+    return json(response_dict)
 
 @ns.route('/stations')
 class Stations(Resource):
@@ -234,18 +245,11 @@ class Stations(Resource):
         res = await get_stations_mongo(obs_params, json_safe='orjson')
         return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
 
-    @ns.doc('post_station', params=OrderedDict([
-        ("name", {"description": "Station Name",
-          "required": True, "type": "string", "format": "text"}),
-        ("latitude", {"description": "Latitude (in decimal degrees)",
-                  "required": True, "type": "string", "format": "number"}),
-        ("longitude", {"description": "Longitude (in decimal degrees)",
-                      "required": True, "type": "string", "format": "number"}),
-    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    @ns.doc('post_station', security={"APIKeyQueryParam": [], "APIKeyHeader": []})
     async def post(self, request, *args, **kwargs):
         '''Add new cosmoz station.'''
         if not "station" in request.json:
-            text(None, status=400)
+            text("station must be in the payload", status=400)
 
         try:
             cleaned = StationSchema().load(request.json["station"])            
@@ -287,16 +291,17 @@ class Station(Resource):
         })
 
 
-    @ns.doc('put_station', params=OrderedDict([
-        ("name", {"description": "Station Name",
-          "required": True, "type": "string", "format": "text"}),
-    ]), security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    @ns.doc('put_station', security={"APIKeyQueryParam": [], "APIKeyHeader": []})
     @ns.produces(accept_types)
     async def put(self, request, *args, station_no=None, **kwargs):
-        '''Add cosmoz station with station_no.'''
-        if station_no is None:
-            raise RuntimeError("station_no is mandatory.")
-        return text("OK")
+        '''Update cosmoz station calibration'''
+        if not request.json: 
+            return text("You need a json body with the request", status=400)
+        if "station" not in request.json:
+            return text("station must be in the body payload", status=400)
+
+        return await generic_put_request(STATION_COLLECTION, {'site_no': int(station_no)}, request.json["station"], StationSchema)
+
 
 @ns.route('/calibrations')
 @ns.param('station_no', "Station Number", type="number", format="integer", _in="query")
@@ -384,6 +389,13 @@ class Calibration(Resource):
             "text/plain": 'site_data_cal_txt_single.html'
         })
 
+    @ns.doc('put_calibration', security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    async def put(self, request, *args, c_id=None, **kwargs):
+        '''Update cosmoz station calibration'''
+        if not "calibration" in request.json:
+            text("calibration must be in the payload", status=400)
+
+        return await generic_put_request(CALIBRATION_COLLECTION, c_id, request.json["calibration"], CalibrationSchema)
 
 @ns.route('/stations/<station_no>/observations')
 @ns.param('station_no', "Station Number", type="number", format="integer")

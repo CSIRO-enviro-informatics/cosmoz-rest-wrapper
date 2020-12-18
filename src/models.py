@@ -37,6 +37,7 @@ class ObservationSchema(Schema):
     pass
 
 class CalibrationSchema(Schema):
+  id = fields.Str(required=False)
   site_no = fields.Int(required=True)
   date = fields.DateTime(required=True)
   label = fields.Str(required=True)

@@ -11,6 +11,7 @@ import config
 from util import datetime_to_iso, datetime_from_iso, datetime_to_date_string
 
 STATION_COLLECTION = 'all_stations'
+CALIBRATION_COLLECTION = 'stations_calibration'
 
 persistent_clients = {
     'influx_client': None,
@@ -153,7 +154,7 @@ async def get_calibration_mongo(c_id, params={}, json_safe=True, jinja_safe=Fals
     property_filter = params.get('property_filter', [])  
     select_filter = props_to_projection(property_filter, ['_id'])
     
-    total, record = await get_record('stations_calibration', {'_id': ObjectId(c_id)}, select_filter)
+    total, record = await get_record(CALIBRATION_COLLECTION, {'_id': ObjectId(c_id)}, select_filter)
     clean_record(record, json_safe, jinja_safe)
 
     record['id'] = str(record['_id'])
@@ -183,7 +184,7 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True, 
         select_filter = None
 
     db = mongo_client.cosmoz
-    stations_calibration_collection = db.stations_calibration
+    stations_calibration_collection = db[CALIBRATION_COLLECTION]
     s = await mongo_client.start_session()
     try:
         total = await stations_calibration_collection.count_documents({'site_no': station_number})
@@ -502,3 +503,23 @@ async def load_default_images():
         if not path.name.startswith('.'):
             with open(path, mode="rb") as f:
                 await insert_file_stream(p.name, f)        
+
+async def update(collection, selector, doc): 
+    #selector can be id string, or ObjectId, or selector dict
+    mongo_client = get_mongo_client()
+    db = mongo_client.cosmoz
+    c = db[collection]
+    if 'id' in doc or '_id' in doc:
+        raise Exception('ids cant be in the document to update')
+    
+    if not isinstance(selector,dict):
+        if isinstance(selector, ObjectId):
+            selector = {'_id': selector}
+        else:
+            selector = {'_id': ObjectId(selector)}
+
+    result = await c.update_one(selector, {'$set': doc})
+
+    if result.modified_count == 0:
+        raise Exception('Update failed')
+
