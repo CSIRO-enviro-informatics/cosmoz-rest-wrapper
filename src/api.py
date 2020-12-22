@@ -195,7 +195,7 @@ async def get_obj_reponse(request, response_types, async_partial_func, api, temp
 
     return await create_response(request, result, response_type, api, template_map)
 
-async def generic_put_request(collection, selector, raw_doc, schema_cls):
+async def generic_update_request(collection, selector, model_name, raw_doc, schema_cls):
     try:
         cleaned = schema_cls().load(raw_doc)            
     except ValidationError as err:
@@ -204,7 +204,28 @@ async def generic_put_request(collection, selector, raw_doc, schema_cls):
         return json(payload, status=422)
     
     await update(collection, selector, cleaned)
-    response_dict = schema_cls().dump(cleaned)
+    new_obj = schema_cls().dump(cleaned)
+    response_dict = {
+        model_name: new_obj
+    }
+    return json(response_dict)
+
+async def generic_create_request(collection, model_name, raw_doc, schema_cls):
+    try:
+        cleaned = schema_cls().load(raw_doc)            
+    except ValidationError as err:
+        errors = err.messages
+        payload = format_errors(schema_cls(), errors, False)
+        return json(payload, status=422)
+        
+    id = await insert(collection, cleaned)
+
+    new_obj = schema_cls().dump(cleaned)
+    new_obj['id'] = str(id)
+    response_dict = {
+        model_name: new_obj
+    }
+
     return json(response_dict)
 
 @ns.route('/stations')
@@ -249,22 +270,16 @@ class Stations(Resource):
     async def post(self, request, *args, **kwargs):
         '''Add new cosmoz station.'''
         if not "station" in request.json:
-            text("station must be in the payload", status=400)
-
-        try:
-            cleaned = StationSchema().load(request.json["station"])            
-            if 'site_no' in cleaned and not await is_unique_val(STATION_COLLECTION, 'site_no', cleaned['site_no']):
-                raise ValidationError({'site_no': ["Value already in use"]})
-        except ValidationError as err:
-            errors = err.messages
-            payload = format_errors(StationSchema(), errors, False)
+            return text("station must be in the payload", status=400)                    
+        
+        raw = request.json["station"]
+        if 'site_no' in raw and not await is_unique_val(STATION_COLLECTION, 'site_no', int(raw['site_no'])):
+            err = ValidationError({'site_no': ["Value already in use"]})
+            payload = format_errors(schema_cls(), err.messages, False)
             return json(payload, status=422)
-            
-        id = await insert(STATION_COLLECTION, cleaned)
 
-        response_dict = StationSchema().dump(cleaned)
+        return await generic_create_request(STATION_COLLECTION, 'station', raw, StationSchema)
 
-        return json(response_dict)
 
 @ns.route('/stations/<station_no>')
 @ns.param('station_no', "Station Number", type="number", format="integer")
@@ -298,9 +313,9 @@ class Station(Resource):
         if not request.json: 
             return text("You need a json body with the request", status=400)
         if "station" not in request.json:
-            return text("station must be in the body payload", status=400)
+            return text("'station' must be in the body payload", status=400)
 
-        return await generic_put_request(STATION_COLLECTION, {'site_no': int(station_no)}, request.json["station"], StationSchema)
+        return await generic_update_request(STATION_COLLECTION, {'site_no': int(station_no)}, 'station', request.json["station"], StationSchema)
 
 
 @ns.route('/calibrations')
@@ -364,7 +379,15 @@ class Calibrations(Resource):
         else:
             return jinja2.render(template, request, headers=headers, **res)
 
-@ns.route('/calibration/<c_id>')
+    @ns.doc('post_calibration', security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    async def post(self, request, *args, **kwargs):
+        '''Add new cosmoz station calibration.'''
+        if not "calibration" in request.json:
+            return text("calibration must be in the payload", status=400)
+        
+        return await generic_create_request(CALIBRATION_COLLECTION, 'calibration',  request.json["calibration"], CalibrationSchema)
+
+@ns.route('/calibrations/<c_id>')
 @ns.param('c_id', "Calibration ID", type="string")
 @ns.response(404, 'Calibration not found')
 class Calibration(Resource):
@@ -395,7 +418,7 @@ class Calibration(Resource):
         if not "calibration" in request.json:
             text("calibration must be in the payload", status=400)
 
-        return await generic_put_request(CALIBRATION_COLLECTION, c_id, request.json["calibration"], CalibrationSchema)
+        return await generic_update_request(CALIBRATION_COLLECTION, c_id, 'calibration', request.json["calibration"], CalibrationSchema)
 
 @ns.route('/stations/<station_no>/observations')
 @ns.param('station_no', "Station Number", type="number", format="integer")
