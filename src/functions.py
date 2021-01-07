@@ -520,6 +520,6 @@ async def update(collection, selector, doc):
 
     result = await c.update_one(selector, {'$set': doc})
 
-    if result.modified_count == 0:
-        raise Exception('Update failed')
+    # if result.modified_count == 0:
+    #     raise Exception('Update failed')
 
