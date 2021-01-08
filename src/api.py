@@ -30,11 +30,12 @@ from functools import partial
 
 import config
 from config import TRUTHS
-from functions import get_observations_influx, get_station_mongo,\
-    get_stations_mongo, get_station_calibration_mongo,\
+from functions import get_observations_influx,\
+    STATION_COLLECTION, get_station_mongo, get_stations_mongo,\
+    CALIBRATION_COLLECTION, get_calibration_mongo, get_station_calibration_mongo,\
+    ANNOTATION_COLLECTION,\
     insert_file_stream, write_file_to_stream,\
-    get_last_observations_influx, is_unique_val, insert, update,\
-    get_calibration_mongo, STATION_COLLECTION, CALIBRATION_COLLECTION
+    get_last_observations_influx, is_unique_val, insert, update
 from util import PY_36, datetime_from_iso
 from auth_functions import token_auth
 from models import StationSchema, CalibrationSchema
@@ -168,6 +169,47 @@ async def create_response(request, content, response_type, api, template_map={})
     else:
         return jinja2.render(template, request, headers=headers, **content)
 
+async def get_many_obj_reponse(request, response_types, async_partial_func, api, template_map={}):
+    response_type = get_response_type(request, response_types)
+
+    if response_type is None:
+        raise MethodNotSupported("Please use a valid accept type.")
+
+    if response_type == "application/json":
+        property_filter = request.args.getlist('property_filter', None)
+        if property_filter:
+            property_filter = str(next(iter(property_filter))).split(',')
+            property_filter = [p for p in property_filter if len(p)]
+    else:
+        # CSV and TXT get all properties, regardless of property_filter, as it might break templates
+        property_filter = "*"
+
+    count = request.args.getlist('count', None)
+    if count:
+        count = min(int(next(iter(count))), MAX_RETURN_COUNT)
+    else:
+        count = 1000
+
+    offset = request.args.getlist('offset', None)
+    if offset:
+        offset = min(int(next(iter(offset))), MAX_RETURN_COUNT)
+    else:
+        offset = 0
+
+    obs_params = {
+        "property_filter": property_filter,
+        "count": count,
+        "offset": offset,
+    }
+
+    json_safe = 'orjson' if response_type == "application/json" else False
+    jinja_safe = 'txt' if response_type == "text/plain" else False
+    jinja_safe = 'csv' if response_type == "text/csv" else jinja_safe
+    
+    result = await async_partial_func(params=obs_params, json_safe=json_safe, jinja_safe=jinja_safe)
+
+    return await create_response(request, result, response_type, api, template_map)
+
 async def get_obj_reponse(request, response_types, async_partial_func, api, template_map={}):
     response_type = get_response_type(request, response_types)
 
@@ -230,8 +272,8 @@ async def generic_create_request(collection, model_name, raw_doc, schema_cls):
 
 @ns.route('/stations')
 class Stations(Resource):
+    accept_types = ["application/json", "text/csv", "text/plain"]
     '''Gets a JSON representation of all sites in the COSMOZ database.'''
-
     @ns.doc('get_stations', params=OrderedDict([
         ("property_filter", {"description": "Comma delimited list of properties to retrieve.\n\n"
                              "_Enter * for all_.",
@@ -244,27 +286,7 @@ class Stations(Resource):
     @ns.produces(["application/json"])
     async def get(self, request, *args, **kwargs):
         '''Get cosmoz stations.'''
-        property_filter = request.args.getlist('property_filter', None)
-        if property_filter:
-            property_filter = str(next(iter(property_filter))).split(',')
-            property_filter = [p for p in property_filter if len(p)]
-        count = request.args.getlist('count', None)
-        if count:
-            count = min(int(next(iter(count))), MAX_RETURN_COUNT)
-        else:
-            count = 1000
-        offset = request.args.getlist('offset', None)
-        if offset:
-            offset = min(int(next(iter(offset))), MAX_RETURN_COUNT)
-        else:
-            offset = 0
-        obs_params = {
-            "property_filter": property_filter,
-            "count": count,
-            "offset": offset,
-        }
-        res = await get_stations_mongo(obs_params, json_safe='orjson')
-        return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
+        return await get_many_obj_reponse(request, self.accept_types, get_stations_mongo, self.api)
 
     @ns.doc('post_station', security={"APIKeyQueryParam": [], "APIKeyHeader": []})
     async def post(self, request, *args, **kwargs):
@@ -338,46 +360,14 @@ class Calibrations(Resource):
         if station_no is None:
             raise RuntimeError("station_no is mandatory.")
         station_no = int(station_no)
-        return_type = match_accept_mediatypes_to_provides(request,
-                                                          self.accept_types)
-        format = request.args.getlist('format', None)
-        if not format:
-            format = request.args.getlist('_format', None)
-        if format:
-            format = next(iter(format))
-            if format in self.accept_types:
-                return_type = format
-        if return_type is None:
-            return ServiceUnavailable("Please use a valid accept type.")
-        if return_type == "application/json":
-            property_filter = request.args.getlist('property_filter', None)
-            if property_filter:
-                property_filter = str(next(iter(property_filter))).split(',')
-                property_filter = [p for p in property_filter if len(p)]
-        else:
-            # CSV and TXT get all properties, regardless of property_filter
-            property_filter = "*"
-        obs_params = {
-            "property_filter": property_filter,
-        }
-        json_safe = 'orjson' if return_type == "application/json" else False
-        jinja_safe = 'txt' if return_type == "text/plain" else False
-        jinja_safe = 'csv' if return_type == "text/csv" else jinja_safe
-        res = await get_station_calibration_mongo(station_no, obs_params, json_safe=json_safe, jinja_safe=jinja_safe)
-        if return_type == "application/json":
-            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
-        headers = {'Content-Type': return_type}
-        jinja2 = get_jinja2_for_api(self.api)
-        if return_type == "text/csv":
-            template = 'site_data_cal_csv.html'
-        elif return_type == "text/plain":
-            template = 'site_data_cal_txt.html'
-        else:
-            raise RuntimeError("Cannot determine template name to use for response type.")
-        if PY_36:
-            return await jinja2.render_async(template, request, headers=headers, **res)
-        else:
-            return jinja2.render(template, request, headers=headers, **res)
+
+        get_cals_func = partial(get_station_calibration_mongo, station_no)
+
+        return await get_obj_reponse(request, self.accept_types, get_cals_func, self.api, {
+            "text/csv": 'site_data_cal_csv.html',
+            "text/plain": 'site_data_cal_txt.html'
+        })
+
 
     @ns.doc('post_calibration', security={"APIKeyQueryParam": [], "APIKeyHeader": []})
     async def post(self, request, *args, **kwargs):
@@ -790,3 +780,35 @@ class ImageDownload(Resource):
         return response.stream(download_fn)
         # return await response.file_stream(file_path)
 
+@ns.route('/annotations')
+@ns.param('station_no', "Station Number", type="number", format="integer", _in="query")
+@ns.response(404, 'Annotations not found')
+class Annotations(Resource):
+    accept_types = ["application/json", "text/csv", "text/plain"]
+
+    @ns.doc('get_station_annotations', params=OrderedDict([
+        ("property_filter", {
+            "description": "Comma delimited list of properties to retrieve.\n\n"
+                           "_Enter * for all_.",
+            "required": False, "type": "string", "format": "text"}),
+    ]))
+    @ns.produces(accept_types)
+    async def get(self, request, *args, **kwargs):
+        '''Get cosmoz station annotations.'''
+        station_no = request.args.get('station_no', None)
+        if station_no is None:
+            raise RuntimeError("station_no is mandatory.")
+        station_no = int(station_no)
+
+        get_annotations_func = partial(get_station_annotations_mongo, station_no)
+
+        return await get_obj_reponse(request, self.accept_types, get_annotations_func, self.api)
+
+
+    @ns.doc('post_annotation', security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    async def post(self, request, *args, **kwargs):
+        '''Add new cosmoz station annotation.'''
+        if not "annotation" in request.json:
+            return text("annotation must be in the payload", status=400)
+        
+        return await generic_create_request(ANNOTATION_COLLECTION, 'annotation',  request.json["annotation"], AnnotationSchema)

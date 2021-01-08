@@ -12,6 +12,7 @@ from util import datetime_to_iso, datetime_from_iso, datetime_to_date_string
 
 STATION_COLLECTION = 'all_stations'
 CALIBRATION_COLLECTION = 'stations_calibration'
+ANNOTATION_COLLECTION = 'annotations'
 
 persistent_clients = {
     'influx_client': None,
@@ -113,10 +114,22 @@ async def get_record(col_name, query, projection):
         await s.end_session()
     if row is None or len(row) < 1:
         raise LookupError("Cannot find record.")
-    print("ROW ********")
-    print(dict(row))
 
     return count, row
+
+async def get_records(col_name, query, projection):
+    mongo_client = get_mongo_client()
+    db = mongo_client.cosmoz
+    col = db[col_name]
+    s = await mongo_client.start_session()
+    try:
+        total = await col.count_documents(query)
+        cursor = col.find(query, projection=projection, session=s)
+        all_results = await cursor.to_list(length=None)
+    finally:
+        await s.end_session()
+
+    return total, all_results
 
 def clean_record(record, json_safe=True, jinja_safe=True):
     if jinja_safe and 'status' in record:
@@ -166,135 +179,51 @@ async def get_calibration_mongo(c_id, params={}, json_safe=True, jinja_safe=Fals
     }
 
 async def get_station_calibration_mongo(station_number, params, json_safe=True, jinja_safe=False):
-    mongo_client = get_mongo_client()
-    station_number = int(station_number)
-    params = params or {}
-    property_filter = params.get('property_filter', [])
-    if property_filter and len(property_filter) > 0:
-        if '*' in property_filter:
-            select_filter = None
-        else:
-            select_filter = OrderedDict({v: True for v in property_filter})
-            if "site_no" not in select_filter:
-                select_filter['site_no'] = True
-            select_filter.move_to_end('site_no', last=False)
-            select_filter['_id'] = True
-            select_filter.move_to_end('_id', last=False)
-    else:
-        select_filter = None
+    # count = params.get('count', 1000)
+    # offset = params.get('offset', 0)
+    property_filter = params.get('property_filter', [])  
+    select_filter = props_to_projection(property_filter, ['_id', 'site_no'])
 
-    db = mongo_client.cosmoz
-    stations_calibration_collection = db[CALIBRATION_COLLECTION]
-    s = await mongo_client.start_session()
-    try:
-        total = await stations_calibration_collection.count_documents({'site_no': station_number})
-        cursor = stations_calibration_collection.find({'site_no': station_number}, projection=select_filter)
-        if cursor is None:
-            raise LookupError("Cannot find site calibration.")
+    total, records = await get_records(CALIBRATION_COLLECTION, {'site_no': station_number}, select_filter)
 
-        #resp = { station_column_to_variable_map[c]: v for c,v in row.items() if c in station_column_to_variable_map.keys() }
-        # if 'installation_date' in resp:
-        #     resp['installation_date'] = datetime_to_iso(resp['installation_date'])
-        responses = []
-        while (await cursor.fetch_next):
-            resp = cursor.next_object()
-            if "_id" in resp:
-                resp['id'] = str(resp['_id'])
-                del resp['_id']
-            for r, v in resp.items():
-                if isinstance(v, datetime.datetime):
-                    if (json_safe and json_safe != "orjson") or jinja_safe: # orjson can handle native datetimes
-                        v = datetime_to_iso(v)
-                    resp[r] = v
-                elif isinstance(v, bson.decimal128.Decimal128):
-                    g = v.to_decimal()
-                    if json_safe and g.is_nan():
-                        g = 'NaN'
-                    elif json_safe == "orjson":  # orjson can't do decimal
-                        g = float(g)  # converting to float is fine because Javascript numbers are native double-float anyway.
-                    resp[r] = g
+    for record in records:
+        clean_record(record, json_safe, jinja_safe)        
+        record['id'] = str(record['_id'])
+        del record['_id']
 
-            responses.append(resp)
-    finally:
-        await s.end_session()
-    count = len(responses)
-    resp = {
+    count = len(records)    
+    return {
         'meta': {
             'total': total,
             'count': count,
-            'offset': 0,
+            'offset': 0, #not implemented yet
         },
-        'calibrations': responses,
+        'calibrations': records,
     }
-    return resp
 
 async def get_stations_mongo(params, json_safe=True, jinja_safe=False):
-    mongo_client = get_mongo_client()
-    params = params or {}
-    property_filter = params.get('property_filter', [])
-    count = params.get('count', 1000)
-    offset = params.get('offset', 0)
-    if property_filter and len(property_filter) > 0:
-        if '*' in property_filter:
-            select_filter = None
-        else:
-            select_filter = OrderedDict({v: True for v in property_filter})
-            if "site_no" not in select_filter:
-                select_filter['site_no'] = True
-            select_filter.move_to_end('site_no', last=False)
-            if "_id" not in select_filter:
-                select_filter['_id'] = False
-            select_filter.move_to_end('_id', last=False)
-    else:
-        select_filter = None
+    # count = params.get('count', 1000)
+    # offset = params.get('offset', 0)
 
-    db = mongo_client.cosmoz
-    all_stations_collection = db[STATION_COLLECTION]
-    s = await mongo_client.start_session()
-    try:
-        total_stations = await all_stations_collection.count_documents({})
-        all_stations_cur = all_stations_collection.find({}, projection=select_filter, skip=offset, limit=count, session=s)
-        if all_stations_cur is None:
-            raise LookupError("Cannot find any sites.")
-        count = 0
-        stations = []
-        while (await all_stations_cur.fetch_next):
-            station = all_stations_cur.next_object()
-            #station = { station_column_to_variable_map[c]: v
-            #            for c,v in _row.items() if c in station_column_to_variable_map.keys() }
-            if jinja_safe and 'status' in station:
-                station['_status'] = station['status']
-                del station['status']
-            for r, v in station.items():
-                if isinstance(v, datetime.datetime):
-                    if (json_safe and json_safe != "orjson") or jinja_safe: #orjson can handle native datetimes
-                        v = datetime_to_iso(v)
-                    station[r] = v
-                elif isinstance(v, bson.decimal128.Decimal128):
-                    g = v.to_decimal()
-                    if json_safe and g.is_nan():
-                        g = 'NaN'
-                    elif json_safe == "orjson":  # orjson can't do decimal
-                        g = float(g)  # converting to float is fine because Javascript numbers are native double-float anyway.
-                    station[r] = g
-            if select_filter is None or select_filter.get('_id', False) is False:
-                if '_id' in station:
-                    del station['_id']
-            if json_safe and 'id' not in station and 'site_no' in station:
-                station['id'] = station['site_no']
-            stations.append(station)
-            count += 1
-    finally:
-        await s.end_session()
-    resp = {
+    property_filter = params.get('property_filter', [])  
+    select_filter = props_to_projection(property_filter, ['_id', 'site_no'])
+
+    total, records = await get_records(STATION_COLLECTION, {}, select_filter)
+
+    for record in records:
+        clean_record(record, json_safe, jinja_safe)        
+        record['id'] = str(record['site_no'])
+        del record['_id']
+
+    count = len(records)    
+    return {
         'meta': {
-            'total': total_stations,
+            'total': total,
             'count': count,
-            'offset': offset,
+            'offset': 0, #not implemented yet
         },
-        'stations': stations,
+        'stations': records,
     }
-    return resp
 
 def get_last_observations_influx(site_number, params, json_safe=True, excel_safe=False):
     influx_client = get_influx_client()

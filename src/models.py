@@ -52,3 +52,12 @@ class CalibrationSchema(Schema):
   gwc = fields.Float(required=True)
   bd = fields.Float(required=True)
   vwc = fields.Float(required=True)
+
+class AnnotationSchema(Schema):
+  id = fields.Str(required=False)
+  site_no = fields.Int(required=True)
+  start = fields.DateTime(required=True)
+  end = fields.DateTime(required=True)
+  category = fields.Str(required=True, validate=validate.OneOf(['error','label']))
+  text = fields.Str(required=True)
+
