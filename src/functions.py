@@ -225,6 +225,45 @@ async def get_stations_mongo(params, json_safe=True, jinja_safe=False):
         'stations': records,
     }
 
+async def get_annotation_mongo(a_id, params={}, json_safe=True, jinja_safe=False):
+    property_filter = params.get('property_filter', [])  
+    select_filter = props_to_projection(property_filter, ['_id'])
+    
+    total, record = await get_record(ANNOTATION_COLLECTION, {'_id': ObjectId(a_id)}, select_filter)
+    clean_record(record, json_safe, jinja_safe)
+
+    record['id'] = str(record['_id'])
+    del record['_id']
+
+    return {
+        'meta': { 'total': total },
+        'annotation': record,
+    }
+
+async def get_station_annotations_mongo(station_number, params, json_safe=True, jinja_safe=False):
+    # count = params.get('count', 1000)
+    # offset = params.get('offset', 0)
+    property_filter = params.get('property_filter', [])  
+    select_filter = props_to_projection(property_filter, ['_id', 'site_no'])
+
+    total, records = await get_records(ANNOTATION_COLLECTION, {'site_no': station_number}, select_filter)
+
+    for record in records:
+        clean_record(record, json_safe, jinja_safe)        
+        record['id'] = str(record['_id'])
+        del record['_id']
+
+    count = len(records)    
+    return {
+        'meta': {
+            'total': total,
+            'count': count,
+            'offset': 0, #not implemented yet
+        },
+        'annotations': records,
+    }
+
+
 def get_last_observations_influx(site_number, params, json_safe=True, excel_safe=False):
     influx_client = get_influx_client()
     site_number = int(site_number)

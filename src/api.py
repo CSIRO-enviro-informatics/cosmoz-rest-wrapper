@@ -33,12 +33,12 @@ from config import TRUTHS
 from functions import get_observations_influx,\
     STATION_COLLECTION, get_station_mongo, get_stations_mongo,\
     CALIBRATION_COLLECTION, get_calibration_mongo, get_station_calibration_mongo,\
-    ANNOTATION_COLLECTION,\
+    ANNOTATION_COLLECTION, get_annotation_mongo, get_station_annotations_mongo,\
     insert_file_stream, write_file_to_stream,\
     get_last_observations_influx, is_unique_val, insert, update
 from util import PY_36, datetime_from_iso
 from auth_functions import token_auth
-from models import StationSchema, CalibrationSchema
+from models import StationSchema, CalibrationSchema, AnnotationSchema
 from json_api_helpers import format_errors
 from marshmallow import ValidationError
 
@@ -784,7 +784,7 @@ class ImageDownload(Resource):
 @ns.param('station_no', "Station Number", type="number", format="integer", _in="query")
 @ns.response(404, 'Annotations not found')
 class Annotations(Resource):
-    accept_types = ["application/json", "text/csv", "text/plain"]
+    accept_types = ["application/json"]
 
     @ns.doc('get_station_annotations', params=OrderedDict([
         ("property_filter", {
@@ -812,3 +812,33 @@ class Annotations(Resource):
             return text("annotation must be in the payload", status=400)
         
         return await generic_create_request(ANNOTATION_COLLECTION, 'annotation',  request.json["annotation"], AnnotationSchema)
+
+@ns.route('/annotations/<a_id>')
+@ns.param('a_id', "Annotation ID", type="string")
+@ns.response(404, 'Annotation not found')
+class Annotation(Resource):
+    accept_types = ["application/json"]
+
+    @ns.doc('get_annotation', params=OrderedDict([
+        ("property_filter", {
+            "description": "Comma delimited list of properties to retrieve.\n\n"
+                           "_Enter * for all_.",
+            "required": False, "type": "string", "format": "text"}),
+    ]))
+    @ns.produces(accept_types)
+    async def get(self, request, *args, a_id=None, **kwargs):
+        '''Get cosmoz station calibrations.'''
+        if a_id is None:
+            raise RuntimeError("id is mandatory.")
+
+        get_annotation_func = partial(get_annotation_mongo, a_id)
+
+        return await get_obj_reponse(request, self.accept_types, get_annotation_func, self.api)
+
+    @ns.doc('put_annotation', security={"APIKeyQueryParam": [], "APIKeyHeader": []})
+    async def put(self, request, *args, a_id=None, **kwargs):
+        '''Update cosmoz station annotation'''
+        if not "annotation" in request.json:
+            text("annotation must be in the payload", status=400)
+
+        return await generic_update_request(ANNOTATION_COLLECTION, a_id, 'annotation', request.json["annotation"], AnnotationSchema)
