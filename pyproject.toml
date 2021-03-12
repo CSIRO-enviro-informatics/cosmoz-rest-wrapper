@@ -13,6 +13,7 @@ readme = "README.rst"
 [tool.poetry.dependencies]
 python = "^3.6.1"
 # These packages are mandatory and form the core of this package’s distribution.
+uvloop = "^0.14.0"
 sanic = "~19.6.3"
 sanic-plugins-framework = "~0.9.5"
 sanic-cors = "^0.10.0.post3"
