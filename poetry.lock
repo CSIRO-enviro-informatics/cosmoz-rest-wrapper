@@ -444,7 +444,7 @@ description = "Sanic plugin for capturing and logging access"
 name = "sanic-metrics"
 optional = false
 python-versions = ">=3.6.1,<4.0.0"
-version = "0.0.7"
+version = "0.0.7.post1"
 
 [package.dependencies]
 aiofiles = ">=0.4.0,<0.7.0"
@@ -486,7 +486,7 @@ description = "Fully featured framework for fast, easy and documented API develo
 name = "sanic-restplus"
 optional = false
 python-versions = "*"
-version = "0.5.5"
+version = "0.5.6"
 
 [package.dependencies]
 aniso8601 = ">=0.82"
@@ -494,7 +494,7 @@ jsonschema = "*"
 methodtools = "*"
 sanic = ">=18.12.0,<21"
 sanic-jinja2-spf = ">=0.8.0"
-sanic-plugins-framework = ">=0.9.4.post1"
+sanic-plugins-framework = ">=0.9.5"
 
 [package.extras]
 doc = ["alabaster (0.7.12)", "Sphinx (2.1.2)", "sphinx-issues (1.2.0)"]
@@ -628,7 +628,7 @@ docs = ["sphinx", "jaraco.packaging (>=8.2)", "rst.linker (>=1.9)"]
 testing = ["pytest (>=4.6)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pytest-cov", "pytest-enabler", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy"]
 
 [metadata]
-content-hash = "db19cdeee1cc29ab8e228a664f35e79e96c0835d73463eff5a09541380d6ef41"
+content-hash = "bb69828c7bfb3894523b2cd1803eeb652c25a5ed4a2be4f4d1460f14ea8791f9"
 lock-version = "1.0"
 python-versions = "^3.6.1"
 
@@ -963,8 +963,8 @@ sanic-jinja2-spf = [
     {file = "Sanic_Jinja2_SPF-0.8.0-py2.py3-none-any.whl", hash = "sha256:b79f4e6b611188d99ed04d7042edc452b8ce6735e07c92bc34b6399625ffaa20"},
 ]
 sanic-metrics = [
-    {file = "sanic-metrics-0.0.7.tar.gz", hash = "sha256:f5ff380e341d080d8a32caf047c5071ee3f1c748dd332cc716b9ac8d6df9cf92"},
-    {file = "sanic_metrics-0.0.7-py3-none-any.whl", hash = "sha256:eef3d75099133b8baf32947418c6816ffbcf1a2862dab62a13b5717390e0884f"},
+    {file = "sanic-metrics-0.0.7.post1.tar.gz", hash = "sha256:b3bcdabc5d34fb5870b6d40c8decf8cb39ea9b7ef9821970d9908c64024661d3"},
+    {file = "sanic_metrics-0.0.7.post1-py3-none-any.whl", hash = "sha256:abf3e5ad5462247cb2379f06f9118c0c9de008496dd6181bcddff2051c1fe612"},
 ]
 sanic-oauthlib = [
     {file = "Sanic-OAuthlib-0.3.0.tar.gz", hash = "sha256:9b952aedffcd9538f05540bfb05d56e0b658a43cd342f38580df3df774a0a413"},
@@ -975,8 +975,8 @@ sanic-plugins-framework = [
     {file = "Sanic_Plugins_Framework-0.9.5-py2.py3-none-any.whl", hash = "sha256:f64d447bad6eee18d219451769ef6a41b853491ae8fab4484e5501ed3b905ad5"},
 ]
 sanic-restplus = [
-    {file = "sanic-restplus-0.5.5.tar.gz", hash = "sha256:3890d0885118c3a45fb0cc2f60becefde864be43b74232221d4300aed9eb0fa1"},
-    {file = "sanic_restplus-0.5.5-py2.py3-none-any.whl", hash = "sha256:7e563798175a942728816f10dd41566ba2c866864503c76a6916f1e51b04b2ec"},
+    {file = "sanic-restplus-0.5.6.tar.gz", hash = "sha256:fbe756883380a2ebf76a18896aa79bf2c52330f327d145ba9a3508b9499f7fd2"},
+    {file = "sanic_restplus-0.5.6-py2.py3-none-any.whl", hash = "sha256:e8fd1445f31c1e8a89b3f8f9fba3082dd3f7b06d68147f130766a020a7cb7e24"},
 ]
 sanic-session = [
     {file = "sanic_session-0.8.0-py3-none-any.whl", hash = "sha256:ead1b62c4c7773cfaaa22d77ed0eb23b423d1d60b21e11225cc9132dff37b2dd"},
