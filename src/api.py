@@ -28,6 +28,17 @@ from config import TRUTHS
 from functions import get_observations_influx, get_station_mongo, get_stations_mongo, get_station_calibration_mongo, get_last_observations_influx
 from util import PY_36, datetime_from_iso
 
+try:
+    # Test to see if this works...
+    test_resp = HTTPResponse(body=None, status=200, body_bytes=b"test")
+    use_body_bytes = True
+except TypeError:
+    try:
+        test_resp = HTTPResponse(body="test", status=200)
+        use_body_bytes = False
+    except TypeError:
+        raise RuntimeError("Cannot determine how to correctly return a HTTPResponse with bytes content.")
+
 orjson_option = OPT_NAIVE_UTC | OPT_UTC_Z
 
 security_defs = {
@@ -159,7 +170,11 @@ class Stations(Resource):
             "offset": offset,
         }
         res = await get_stations_mongo(obs_params, json_safe='orjson')
-        return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
+        if use_body_bytes:
+            resp = HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
+        else:
+            resp = HTTPResponse(fast_dumps(res, option=orjson_option), status=200, content_type='application/json')
+        return resp
 
     @ns.doc('post_station', params=OrderedDict([
         ("name", {"description": "Station Name",
@@ -217,7 +232,11 @@ class Station(Resource):
         jinja_safe = 'txt' if return_type == "text/plain" else False
         res = await get_station_mongo(station_no, obs_params, json_safe=json_safe, jinja_safe=jinja_safe)
         if return_type == "application/json":
-            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
+            if use_body_bytes:
+                resp = HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
+            else:
+                resp = HTTPResponse(fast_dumps(res, option=orjson_option), status=200, content_type=return_type)
+            return resp
         elif return_type == "application/csv":
             raise NotImplementedError()
             #return build_csv(res)
@@ -287,7 +306,11 @@ class StationCalibration(Resource):
         jinja_safe = 'csv' if return_type == "text/csv" else jinja_safe
         res = await get_station_calibration_mongo(station_no, obs_params, json_safe=json_safe, jinja_safe=jinja_safe)
         if return_type == "application/json":
-            return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
+            if use_body_bytes:
+                resp = HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
+            else:
+                resp = HTTPResponse(fast_dumps(res, option=orjson_option), status=200, content_type=return_type)
+            return resp
         headers = {'Content-Type': return_type}
         jinja2 = get_jinja2_for_api(self.api)
         if return_type == "text/csv":
@@ -458,7 +481,11 @@ class Observations(Resource):
             json_safe = 'orjson'
             try:
                 res = get_observations_influx(station_no, obs_params, json_safe, False)
-                return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
+                if use_body_bytes:
+                    resp = HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
+                else:
+                    resp = HTTPResponse(fast_dumps(res, option=orjson_option), status=200, content_type=return_type)
+                return resp
             except Exception as e:
                 print(e)
                 raise e
@@ -567,7 +594,11 @@ class LastObservations(Resource):
             json_safe = 'orjson'
             try:
                 res = get_last_observations_influx(station_no, obs_params, json_safe, False)
-                return HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
+                if use_body_bytes:
+                    resp = HTTPResponse(None, status=200, content_type=return_type, body_bytes=fast_dumps(res, option=orjson_option))
+                else:
+                    resp = HTTPResponse(fast_dumps(res, option=orjson_option), status=200, content_type=return_type)
+                return resp
             except Exception as e:
                 print(e)
                 raise e
@@ -660,4 +691,8 @@ class Metrics(Resource):
             raise NotImplementedError(action)
         shared_rcontext['override_metrics'] = metrics_override
         res = {"result": "success"}
-        return HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
+        if use_body_bytes:
+            resp = HTTPResponse(None, status=200, content_type='application/json', body_bytes=fast_dumps(res, option=orjson_option))
+        else:
+            resp = HTTPResponse(fast_dumps(res, option=orjson_option), status=200, content_type='application/json')
+        return resp
