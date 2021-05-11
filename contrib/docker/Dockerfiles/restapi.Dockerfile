@@ -14,7 +14,7 @@ RUN echo 'manylinux1_compatible = True' > /usr/lib/python3.6/_manylinux.py &&\
     rm /usr/lib/python3.6/_manylinux.py
 WORKDIR /usr/local/lib
 ARG CLONE_BRANCH=master
-ARG CLONE_ORIGIN="https://github.com/CSIRO-enviro-informatics/cosmoz-rest-wrapper.git"
+ARG CLONE_ORIGIN="https://bitbucket.org/terndatateam/cosmoz-rest-wrapper"
 ARG CLONE_COMMIT=HEAD
 RUN git clone --branch "${CLONE_BRANCH}" "${CLONE_ORIGIN}" src && mv ./src ./cosmoz-rest-wrapper
 WORKDIR /usr/local/lib/cosmoz-rest-wrapper
