@@ -1,0 +1,14 @@
+version: "3.6"
+# Requires docker-compose min version 1.22
+# (for complex labels, and for $PWD in dockerfile:)
+services:
+
+  landscapes.cosmoz.rest.api:
+    image: docker.io/ternau/landscapes.cosmoz.rest.api:latest
+    build:
+      dockerfile: "${PWD}/Dockerfiles/restapi.Dockerfile"
+      context: ../../
+      network: host
+    hostname: "landscapes.cosmoz.rest.api"
+    environment:
+      - PYTHONUNBUFFERED=TRUE

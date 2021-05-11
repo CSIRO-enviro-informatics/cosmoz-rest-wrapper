@@ -29,7 +29,7 @@ def get_apikey_mongo(apikey, params):
             select_filter.move_to_end('_id', last=False)
     else:
         select_filter = None
-    db = client.cosmoz
+    db = getattr(client, config.MONGODB_NAME)
     api_keys_collection = db.api_keys
     row = api_keys_collection.find_one({'apikey': apikey}, projection=select_filter)
     if row is None or len(row) < 1:
@@ -64,7 +64,7 @@ def find_apikey_by_access_token_mongo(access_token, params):
             select_filter.move_to_end('_id', last=False)
     else:
         select_filter = None
-    db = client.cosmoz
+    db = getattr(client, config.MONGODB_NAME)
     api_keys_collection = db.api_keys
     row = api_keys_collection.find_one({'access_token': access_token}, projection=select_filter)
     if row is None or len(row) < 1:
@@ -89,7 +89,7 @@ def put_apikey_mongo(apikey, params, renew=False):
     if renew:
         assert 'access_token' in params
         criteria['access_token'] = params['access_token']
-    db = client.cosmoz
+    db = getattr(client, config.MONGODB_NAME)
     api_keys_collection = db.api_keys
     row = api_keys_collection.update_one(criteria, {"$set": params}, upsert=(not renew))
     if not row:

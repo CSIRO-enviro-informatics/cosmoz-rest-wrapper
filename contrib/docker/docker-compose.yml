@@ -1,0 +1,146 @@
+version: "3.6"
+services:
+
+  landscapes.cosmoz.influxdb:
+    image: influxdb:1.7-alpine
+    #ports:
+    #  - "8186:8086"
+    #  - "8188:8088"
+    networks:
+      - backend
+    hostname: "cosmoz.influxdb"
+    volumes:
+      # The /var/lib/influxdb dir has subdirs {data, meta, wal} all need to be persisted.
+      - timeseriesdb-data:/var/lib/influxdb
+      - "${PWD}/../../influxdb.conf:/etc/influxdb/influxdb.conf"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    environment:
+      - INFLUXDB_DB=cosmoz
+    command: ["influxd", "-config", "/etc/influxdb/influxdb.conf"]
+
+  landscapes.cosmoz.backup.influxdb:
+    image: influxdb:1.7-alpine
+    networks:
+      - backend
+    hostname: "cosmoz.backup.influxdb"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+      - "timeseriesdb-backup:/influx_backup"
+    environment:
+      - INFLUXDB_DB=cosmoz
+    depends_on:
+      - landscapes.cosmoz.influxdb
+    #command: ["influxd", "backup", "-portable", "-host", "cosmoz.influxdb:8088", "/influx_backup"]
+    #command: "sh -c 'sleep 30 && influxd backup -portable -host cosmoz.influxdb:8088 /influx_backup'"
+    command: ["tail", "-f", "/dev/null"]  # By default, this does nothing. It gets scheduled
+    labels:
+      ofelia.enabled: "true"
+      #ofelia.job-exec.influx-db-backup.no-overlap: "true"
+      ofelia.job-exec.influx-db-backup.schedule: "0 23 * * 5" # Every Friday at 11pm.
+      ofelia.job-exec.influx-db-backup.command: "influxd backup -portable -host cosmoz.influxdb:8088 /influx_backup"
+
+  landscapes.cosmoz.mongodb:
+    image: ashleysommer/alpine-mongo:latest
+    #ports:
+    #  - "27018:27017"
+    #  - "28017"
+    networks:
+      - backend
+    hostname: "cosmoz.mongodb"
+    volumes:
+      - documentdb-data:/data/db
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+    environment:
+      - MONGODB_RUN="/var/run/mongodb"
+      - MONGODB_DATA="/var/lib/mongodb"
+      - MONGODB_USER="mongodb"
+      - MONGODB_IP="0.0.0.0"
+      - MONGODB_OPTIONS="--journal"
+
+  landscapes.cosmoz.backup.mongodb:
+    image: cashstory/mongodump:latest
+    networks:
+      - backend
+    hostname: "cosmoz.backup.mongodb"
+    volumes:
+      - "/etc/localtime:/etc/localtime:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+      - "documentdb-backup:/dump",
+    depends_on:
+      - landscapes.cosmoz.mongodb
+    environment:
+      - "TZ="
+    entrypoint: [] #Leave this empty to override the special entrypoint in cashstory/mongodump
+    #command: "bash -c 'sleep 30 && mongodump -v --host=cosmoz.mongodb:27017 --gzip --out=/dump/`date -I`/'"
+    command: ["tail", "-f", "/dev/null"]  # By default, this does nothing. It gets scheduled
+    labels:
+      ofelia.enabled: "true"
+      #ofelia.job-exec.mongodb-db-backup.no-overlap: "true"
+      ofelia.job-exec.mongodb-db-backup.schedule: "0 22 * * 5" # Every Friday at 10pm.
+      ofelia.job-exec.mongodb-db-backup.command: "bash -c 'mongodump -v --host=cosmoz.mongodb:27017 --gzip --out=/dump/`date -I`/'"
+
+  landscapes.cosmoz.rest.api:
+    image: docker.io/ternau/landscapes.cosmoz.rest.api:latest
+    hostname: "landscapes.cosmoz.rest.api"
+    environment:
+      - PYTHONUNBUFFERED=TRUE
+      - MONGODB_HOST=cosmoz.mongodb
+      - MONGODB_PORT=27017
+      - INFLUXDB_HOST=cosmoz.influxdb
+      - INFLUXDB_PORT=8086
+      - REST_API_LISTEN_HOST=0.0.0.0
+      - METRICS_DIRECTORY=/usr/local/lib/cosmoz-rest-wrapper/metrics
+      - SANIC_PROXIES_COUNT=1
+    depends_on:
+      - landscapes.cosmoz.influxdb
+      - landscapes.cosmoz.mongodb
+    ports:
+      - "8098:8080"
+    networks:
+      - backend
+    volumes:
+      - "${PWD}/../../metrics:/usr/local/lib/cosmoz-rest-wrapper/metrics"
+      - "${PWD}/../../cosmoz_rest_wrapper.env:/usr/local/lib/cosmoz-rest-wrapper/src/.env"
+      - "${PWD}/../../app_scripts.env:/usr/local/lib/cosmoz-data-pipeline/.env"
+    labels:
+      ofelia.enabled: "true"
+      #ofelia.job-exec.process-levels.no-overlap: "true"
+      ofelia.job-exec.process-levels.schedule: "0 2,14 * * *"  # Daily 2am and 2pm
+      ofelia.job-exec.process-levels.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash process_levels.sh'"
+      #ofelia.job-exec.get-nmdb-intensities.no-overlap: "true"
+      ofelia.job-exec.get-nmdb-intensities.schedule: "0 1,13 * * *"  # Daily 1am and 2pm
+      ofelia.job-exec.get-nmdb-intensities.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash get_nmdb_intensities.sh'"
+      #ofelia.job-exec.upload-metrics.no-overlap: "true"
+      ofelia.job-exec.upload-metrics.schedule: "30 0 * * *"  # Daily 12.30am
+      ofelia.job-exec.upload-metrics.command: "bash -c 'cd /usr/local/lib/cosmoz-data-pipeline && bash upload_metrics.sh'"
+
+
+networks:
+  backend:
+
+volumes:
+  timeseriesdb-data:
+    driver_opts:
+      type: none
+      device: "${PWD}/$HOST_INFLUXDB_DATA_DIR"
+      o: bind
+  timeseriesdb-backup:
+    driver_opts:
+      type: none
+      device: "${PWD}/$HOST_INFLUXDB_BACKUP_DIR"
+      o: bind
+  documentdb-data:
+    driver_opts:
+      type: none
+      device: "${PWD}/$HOST_MONGODB_DATA_DIR"
+      o: bind
+  documentdb-backup:
+    driver_opts:
+      type: none
+      device: "${PWD}/$HOST_MONGODB_BACKUP_DIR"
+      o: bind

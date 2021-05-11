@@ -23,8 +23,9 @@ def get_mongo_client():
 def get_influx_client():
     if persistent_clients['influx_client'] is None:
         persistent_clients['influx_client'] = InfluxDBClient(
-            config.INFLUXDB_HOST, config.INFLUXDB_PORT, 'root', 'root',
-            'cosmoz', timeout=30)
+            config.INFLUXDB_HOST, config.INFLUXDB_PORT,
+            config.INFLUXDB_USERNAME, config.INFLUXDB_PASSWORD,
+            config.INFLUXDB_NAME, timeout=30)
     return persistent_clients['influx_client']
 
 obsv_variable_to_column_map = {
@@ -95,7 +96,7 @@ async def get_station_mongo(station_number, params, json_safe=True, jinja_safe=F
             select_filter.move_to_end('_id', last=False)
     else:
         select_filter = None
-    db = mongo_client.cosmoz
+    db = getattr(mongo_client, config.MONGODB_NAME)
     all_stations_collection = db.all_stations
     s = await mongo_client.start_session()
     try:
@@ -154,7 +155,7 @@ async def get_station_calibration_mongo(station_number, params, json_safe=True, 
         select_filter = None
     if select_filter is None:
         select_filter = {'_id': False}
-    db = mongo_client.cosmoz
+    db = getattr(mongo_client, config.MONGODB_NAME)
     stations_calibration_collection = db.stations_calibration
     s = await mongo_client.start_session()
     try:
@@ -219,7 +220,7 @@ async def get_stations_mongo(params, json_safe=True, jinja_safe=False):
     else:
         select_filter = None
 
-    db = mongo_client.cosmoz
+    db = getattr(mongo_client, config.MONGODB_NAME)
     all_stations_collection = db.all_stations
     s = await mongo_client.start_session()
     try:
